@@ -12,4 +12,5 @@ permissionRouter.post('/permissions_validation', roleValidation);
 permissionRouter.post('/permissions/userRoles', fetchUserRoles);
 permissionRouter.get('/crud-permission-count', getCrudPermissionCounts);
 
+
 module.exports = { permissionRouter };
