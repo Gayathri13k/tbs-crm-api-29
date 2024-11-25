@@ -1,5 +1,5 @@
 const express = require('express')
-const pool = require('../dbconnection.js')
+const pool = require('../config/db')
 const xlsx = require('xlsx')
 
 
@@ -108,12 +108,10 @@ const putData = (req, res) => {
     const { field_id, select_fields } = req.body
     console.log('Request Body:', req.body)
 
-    // Check if file upload exceeded size limit
     if (req.file && req.file.size > 15 * 1024 * 1024) {
         return res.status(400).send('File size exceeded (Max: 15MB)')
     }
 
-    // Check if uploaded file mimetype is allowed
     if (!req.file || !['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'application/pdf', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(req.file.mimetype)) {
         return res.status(400).send('Only .jpeg, .jpg, .png, .mp4, .pdf, .xls, and .xlsx files are allowed')
     }
@@ -127,7 +125,7 @@ const putData = (req, res) => {
     const updateData = `UPDATE import_data 
     SET field_id = $1,
     select_fields = $2,
-    upload_files = $3 
+    upload_files = $3, updated_date = now() 
     WHERE imp_id = $4`
     const values = [field_id, select_fields, uploadFileUrl, ID]
 
@@ -141,4 +139,4 @@ const putData = (req, res) => {
 }
 
 
-module.exports = {getData, getFields, deleteData, sheetUpload, postData, putData}
+module.exports = { getData, getFields, deleteData, sheetUpload, postData, putData }

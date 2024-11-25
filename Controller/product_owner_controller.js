@@ -2,45 +2,53 @@ const pool = require('../config/db')
 const jwt = require('jsonwebtoken')
 
 const Prdct_Owner_Login = async (req, res) => {
-    const { email_id, phone, password } = req.body
-
+    const { email_id, phone, password } = req.body;
 
     try {
-        let product_owner
+        let product_owner;
 
         if (email_id) {
-            const emailResult = await pool.query('SELECT * FROM product_owner_tbl WHERE email_id = $1', [email_id])
-            product_owner = emailResult.rows[0]
+            const emailResult = await pool.query('SELECT * FROM product_owner_tbl WHERE email_id = $1', [email_id]);
+            product_owner = emailResult.rows[0];
         }
 
         if (!product_owner && phone) {
-            const phoneResult = await pool.query('SELECT * FROM product_owner_tbl WHERE phone = $1', [phone])
-            product_owner = phoneResult.rows[0] 
+            const phoneResult = await pool.query('SELECT * FROM product_owner_tbl WHERE phone = $1', [phone]);
+            product_owner = phoneResult.rows[0];
         }
 
         if (!product_owner) {
-            return res.status(201).json({ error: 'No product_owner found with provided email/phone' })
+            return res.status(201).json({ error: 'No product owner found with provided email/phone' });
         }
 
         if (product_owner.password !== password) {
-            return res.status(201).json({ error: 'Password incorrect' })
+            return res.status(401).json({ error: 'Password incorrect' });
         }
 
-        const product_ownerId = product_owner.owner_id
-        const product_Name = product_owner.owner_name
+        const product_ownerId = product_owner.owner_id;
+        const product_Name = product_owner.owner_name;
 
-        const typeResult = await pool.query('SELECT type_id, type_name FROM product_owner_tbl')
-        const { type_id, type_name } = typeResult.rows[0]
+        const typeResult = await pool.query('SELECT type_id, type_name FROM product_owner_tbl WHERE owner_id = $1', [product_ownerId]);
+        const typeData = typeResult.rows[0];
 
-        const token = jwt.sign({ ownerId: product_ownerId }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' })
+        if (!typeData) {
+            return res.status(404).json({ error: 'No type information found for this product owner' });
+        }
 
-        res.json({ id: product_ownerId, 
-            user_name : product_Name, 
-            token: token, type_id : type_id, 
-            type_name: type_name })
+        const { type_id, type_name } = typeData;
+
+        const token = jwt.sign({ ownerId: product_ownerId }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
+
+        res.json({
+            id: product_ownerId,
+            user_name: product_Name,
+            token: token,
+            type_id: type_id,
+            type_name: type_name,
+        });
 
     } catch (error) {
-        res.status(201).json({ error: error.message })
+        res.status(500).json({ error: error.message });
     }
 }
 

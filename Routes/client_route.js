@@ -34,12 +34,27 @@ const client_upload = multer({
     }
 })
 
-cltrouter.post('/client-details', postClient)
-cltrouter.put('/client-profileImg/:tbs_client_id', client_upload.single('profile_img'), ClientProfileImg)
+const client_excelupload = multer({ 
+    storage: client_storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, 
+    fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only .xlsx files are allowed'), false);
+        }
+    }
+})
+
+cltrouter.post('/client-details', client_upload.single('company_logo'), postClient)
+//cltrouter.put('/client-profileImg/:tbs_client_id',  ClientProfileImg)
 cltrouter.delete('/client-details/:tbs_client_id',  deleteClient)
 cltrouter.get('/client-details',  getClientcompany)
 cltrouter.get('/client-details/:tbs_client_id',  getclientByID)
-cltrouter.put('/client-details/:tbs_client_id',  putClient)
+cltrouter.put('/client-details/:tbs_client_id', client_upload.single('company_logo'),  putClient)
 
 cltrouter.put('/client-address/:tbs_client_id',  updateClientAddress)
 cltrouter.get('/client-address/:tbs_client_id', getClientAddressById)
@@ -54,7 +69,7 @@ cltrouter.get('/client-gsts', getAllGst)
 cltrouter.get('/All-client-details', getClientDetails);
 cltrouter.put('/client-company-details/:tbs_client_id', putClientCompanyDetails)
 
-cltrouter.post('/upload', client_upload.single('file'), ExcelUpload)
+cltrouter.post('/upload', client_excelupload.single('file'), ExcelUpload)
 
 cltrouter.get('/client-profileImg',  GetClientProfileImg)
 cltrouter.get('/client-profileImg/:tbs_client_id',  GetClientProfileImgById)

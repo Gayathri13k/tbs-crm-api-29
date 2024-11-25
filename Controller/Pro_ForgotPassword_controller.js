@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const pool = require('../dbconnection');
+const pool = require('../config/db');
 
 // Nodemailer configuration
 const transporter = nodemailer.createTransport({
@@ -7,10 +7,10 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false,
   auth: {
-    user: 'support@thebusstand.com',
-    pass: 'ymdkbkmrvhjblbpz', // App password or email password
+    user: 'no-reply@thebusstand.com',
+    pass: 'bdqbqlgqgcnnrxrr', 
   },
-});
+})
 
 // Function to generate OTP
 function generateOTP() {
@@ -40,7 +40,7 @@ const ProforgotPassword = async (req, res) => {
     // Send OTP via email
     const mailOptions = {
       to: user.email_id,
-      from: 'support@thebusstand.com',
+      from: 'no-reply@thebusstand.com',
       subject: 'Password Reset OTP',
       html: `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 15px;">
@@ -103,8 +103,6 @@ const ProresetPassword = async (req, res) => {
     // Update password in the database
     await pool.query('UPDATE product_owner_tbl SET password = $1 WHERE email_id = $2', [newPassword, email_id]);
    
-
-    // Remove OTP from map
     otpMap.delete(email_id);
 
     res.json({ message: 'Password reset successful' });

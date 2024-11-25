@@ -7,12 +7,12 @@ const getAllOperatorDetails = async (req, res) => {
             SELECT o.*, od.*
             FROM operators_tbl AS o
             LEFT JOIN operator_details AS od ON o.tbs_operator_id = od.tbs_operator_id
-            WHERE o.user_status_id IN (0,1,2)
+            WHERE o.user_status_id IN (0,1,2,3) ORDER BY created_date DESC
         `;
         const result = await pool.query(query);
 
         if (result.rowCount === 0) {
-            return res.status(200).json({ message: 'No operators with draft or active status found' ,
+            return res.status(200).json({ message: 'No operators with draft or active and inactive status found' ,
                 data: result.rows
             });
         }
@@ -33,7 +33,7 @@ const getOperatorByID = async (req, res) => {
             SELECT o.*, od.*
             FROM operators_tbl AS o
             LEFT JOIN operator_details AS od ON o.tbs_operator_id = od.tbs_operator_id
-            WHERE o.tbs_operator_id = $1 AND o.user_status_id IN (0,1,2)
+            WHERE o.tbs_operator_id = $1 AND o.user_status_id IN (0,1,2,3) ORDER BY created_date DESC
         `;
 
         const result = await pool.query(query, [operatorid]);
@@ -48,12 +48,12 @@ const getOperatorByID = async (req, res) => {
 const putUser_Status = async (req, res) => {
     try {
         const tbs_operator_id = req.params.tbs_operator_id;
-        const { user_status, user_status_id } = req.body;
+        const { user_status, user_status_id, req_status, req_status_id } = req.body;
 
         const queryResult = await pool.query('SELECT owner_name FROM operators_tbl WHERE tbs_operator_id = $1', [tbs_operator_id]);
 
         if (queryResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Operator not found' });
+            return res.status(201).json({ error: 'Operator not found' });
         }
 
         let generate_key = null;
@@ -70,9 +70,11 @@ const putUser_Status = async (req, res) => {
             SET 
                 user_status = $1,
                 user_status_id = $2,
-                generate_key = COALESCE($3, generate_key)
-            WHERE tbs_operator_id = $4`,
-            [user_status, user_status_id, generate_key, tbs_operator_id]
+                generate_key = COALESCE($3, generate_key),
+                req_status = $4,
+                req_status_id = $5
+            WHERE tbs_operator_id = $6`,
+            [user_status, user_status_id, generate_key, req_status, req_status_id, tbs_operator_id]
         )
 
         if (user_status_id === 1) {
@@ -91,13 +93,14 @@ const putUser_Status = async (req, res) => {
     }
 }
 
+//user management-PARTNERS GETbyID CONTROLLER
 const getAllPartnerDetails = async (req, res) => {
     try {
         const query = `
             SELECT pd.*, pdoc.*
             FROM partner_details AS pd
             LEFT JOIN partner_documents AS pdoc ON pd.tbs_partner_id = pdoc.tbs_partner_id
-            WHERE pd.partner_status_id IN (0, 1, 2)
+            WHERE pd.partner_status_id IN (0,1,2,3)
         `;
         const result = await pool.query(query);
 
@@ -121,7 +124,7 @@ const getPartnerByID = async (req, res) => {
             SELECT pd.*, pdoc.*
             FROM partner_details AS pd
             LEFT JOIN partner_documents AS pdoc ON pd.tbs_partner_id = pdoc.tbs_partner_id
-            WHERE pd.tbs_partner_id = $1 AND pd.partner_status_id IN (0, 1, 2)
+            WHERE pd.tbs_partner_id = $1 AND pd.partner_status_id IN (0,1,2,3)
         `;
         const result = await pool.query(query, [partnerId]);
         res.status(200).send(result.rows);
@@ -184,15 +187,12 @@ const searchClientDetails = async (req, res) => {
                 FROM client_company_details
                 WHERE LOWER(owner_name) LIKE $1
                    OR CAST(phone AS TEXT) LIKE $1
-                   OR LOWER(emailid) LIKE $1
-            `;
+                   OR LOWER(emailid) LIKE $1 `;
 
             queryParams = [searchValue];
         } else {
-            query = `
-                SELECT *
-                FROM client_company_details
-            `;
+            query = ` SELECT *
+                        FROM client_company_details `;
         }
 
         const result = await pool.query(query, queryParams);
@@ -201,7 +201,7 @@ const searchClientDetails = async (req, res) => {
         console.error('Error executing query', err);
         res.status(500).json({ message: "Error searching records" });
     }
-};
+}
 
 //SEARCH PRODUCT OWNER-EMPLOYEE DETAILS
 const searchProEmpDetails = async (req, res) => {

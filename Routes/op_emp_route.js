@@ -34,9 +34,24 @@ const emp_upload = multer({
     }
 })
 
+const emp_excelupload = multer({ 
+    storage: emp_storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, 
+    fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only.xlsx files is allowed'), false);
+        }
+    }
+})
+
 // EMPLOYEE PERSONAL DETAILS 
-emprouter.post('/emp-personal-details', createEMP)
-emprouter.put('/emp-personal-details/:tbs_op_emp_id', updateEMP)
+emprouter.post('/emp-personal-details', emp_upload.single('profile_img'), createEMP)
+emprouter.put('/emp-personal-details/:tbs_op_emp_id', emp_upload.single('profile_img'), updateEMP)
 emprouter.put('/emp-profileImg/:tbs_op_emp_id', emp_upload.single('profile_img'), updateProfile)
 emprouter.delete('/emp-personal-details/:tbs_op_emp_id', deleteEMP)
 emprouter.get('/emp-personal-details', getEMP)
@@ -79,7 +94,7 @@ emprouter.get('/emp-professional-documents', FetchAllDocs)
 emprouter.get('/emp-documents-only/:tbs_op_emp_id', FetchDoconly)
 emprouter.get('/emp-documents-only', FetchAllDocsOnly)
 emprouter.get('/employee-search/:search_term', searchEmployees)
-emprouter.post('/employee-importExcel', emp_upload.single('xlsxFile'), insertData)
+emprouter.post('/employee-importExcel', emp_excelupload.single('xlsxFile'), insertData)
 emprouter.put('/emp-status/:tbs_op_emp_id', updateEMPStatus)
 emprouter.get('/emp-profileImg', GETAllProfile)
 emprouter.get('/emp-profileImg/:tbs_op_emp_id', GETProfileById)

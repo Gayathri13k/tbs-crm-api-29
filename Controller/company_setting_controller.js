@@ -93,7 +93,7 @@ const delCompany = async (req, res) => {
         [user_id]
       );
       if (rows.length === 0) {
-        return res.status(404).json({ error: 'No company settings found for this user' });
+        return res.status(201).json({ error: 'No company settings found for this user' });
       }
       res.json(rows);
     } catch (err) {
