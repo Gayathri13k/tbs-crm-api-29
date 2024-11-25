@@ -1,14 +1,14 @@
 const axios = require('axios');
  
 // Variables
-const clientId = '5dbd81bd-24c2-40bc-bee6-bf0e34529491'; // Your Client ID
-const clientSecret = 'Xjr8Q~gImtMAEg_I3Ld_lSA5oAfy2FBRKB.dSa~J'; // Your Client Secret
-const tenantId = '07bb39ed-9c90-4f4f-8ea7-dae5ab5006d4'; // Your Tenant ID
-const reportId = '279264e7-5394-4a94-b8eb-da9c65967003'; // Your Report ID
-const datasetId = '61554d63-b649-4e46-b5d4-c1ee239fa8c3'; // Your Dataset ID
-const groupId = '4678ecce-a887-4d9c-ac37-082258bcafaa'; // Your Group/Workspace ID
-const authorityUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
-const scope = 'https://analysis.windows.net/powerbi/api/.default';
+// const clientId = '5dbd81bd-24c2-40bc-bee6-bf0e34529491'; // Your Client ID
+// const clientSecret = 'Xjr8Q~gImtMAEg_I3Ld_lSA5oAfy2FBRKB.dSa~J'; // Your Client Secret
+// const tenantId = '07bb39ed-9c90-4f4f-8ea7-dae5ab5006d4'; // Your Tenant ID
+// const reportId = '279264e7-5394-4a94-b8eb-da9c65967003'; // Your Report ID
+// const datasetId = '61554d63-b649-4e46-b5d4-c1ee239fa8c3'; // Your Dataset ID
+// const groupId = '4678ecce-a887-4d9c-ac37-082258bcafaa'; // Your Group/Workspace ID
+// const authorityUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+// const scope = 'https://analysis.windows.net/powerbi/api/.default';
  
 // Step 1: Get Access Token
 const getAccessToken = async () => {
