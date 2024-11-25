@@ -31,7 +31,7 @@ const { MobadvertisementRouter } = require('./Routes/Mobile_advertisements_route
 const { configRouter } = require('./Routes/emailConfig_routes');
 const { countrouter } = require('./Routes/countRoutes');
 const { RECrouter } = require('./Routes/recycle_bin_routes');
-const { AccessToken } = require('./powerBiAccessToken');
+//const { AccessToken } = require('./powerBiAccessToken');
 const { referEarnRouter } = require('./Routes/refer_earn_routes');
 const { tbsInfoRouter } = require('./Routes/tbs_info_routes');
 const { faqrouter } = require('./Routes/faqRoute');
@@ -90,7 +90,7 @@ app.use('/api', countrouter)
 app.use('/api', RECrouter)
 app.use('/api', referEarnRouter)
 app.use('/api', tbsInfoRouter)
-app.get('/api/getPowerBIToken', AccessToken)
+//app.get('/api/getPowerBIToken', AccessToken)
 app.use('/api', faqrouter)
 app.use('/api', redeemoffrouter)
 app.use('/api', currencyRouter)
