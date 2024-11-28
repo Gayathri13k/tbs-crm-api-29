@@ -106,6 +106,49 @@ const getAdbyId = async (req, res) => {
     }
 }
 
+//GET BY USER ID
+const getAdbyUserId = async (req, res) => {
+    try {
+        const { tbs_user_id } = req.params;
+        const getUserId = `SELECT a.*, 
+                            c.owner_name, 
+                            c.emailid, 
+                            c.phone,
+                            c.web_url 
+                        FROM 
+                            advertisements_tbl a
+                        JOIN 
+                            client_company_details c 
+                        ON 
+                            a.tbs_client_id = c.tbs_client_id WHERE a.tbs_user_id = $1`;
+
+        const result = await pool.query(getUserId, [tbs_user_id]);
+
+        if (result.rows.length === 0) {
+            return res.status(201).json(result);
+        }
+
+        // Map through the rows to transform data into desired format
+        const adDetails = result.rows.map(row => ({
+            ...row,
+            ad_video_details: {
+                path: row.ad_video,
+                size: row.ad_file_size,
+                type: row.ad_file_type,
+                duration: row.duration,
+                hours: row.hours,
+                fieldname: "ad_video",
+            }
+        }));
+
+        res.status(200).json(adDetails);
+    } catch (err) {
+        console.log(err.message);
+        res.status(500).send("Error getting records");
+    }
+};
+
+
 //GET ADVERTISEMENT BY STATUS
 const getAdbyStatus = async (req, res) => {
     try {
@@ -281,8 +324,8 @@ const deleteAd = async (req, res) => {
 
 const postAd = async (req, res) => {
     const {
-        ad_title, start_date, end_date, ad_description, usage_per_day, ads_status, 
-        ads_status_id, tbs_client_id, page_id, page_name, tbs_user_id, hours, 
+        ad_title, start_date, end_date, ad_description, usage_per_day, ads_status,
+        ads_status_id, tbs_client_id, page_id, page_name, tbs_user_id, hours,
         duration, ads_plan_id, ads_req_status, ads_req_status_id
     } = req.body;
 
@@ -306,7 +349,6 @@ const postAd = async (req, res) => {
     let tbs_ad_id;
 
     try {
-        // Fetch company_name from client_company_details based on tbs_client_id
         const clientResult = await pool.query(
             `SELECT company_name FROM client_company_details WHERE tbs_client_id = $1`,
             [tbs_client_id]
@@ -318,7 +360,6 @@ const postAd = async (req, res) => {
 
         const client_details = clientResult.rows[0].company_name;
 
-        // Check if the user is an employee or a product owner
         if (tbs_user_id.startsWith('tbs-pro_emp')) {
             const employeeResult = await pool.query(
                 `SELECT emp_status, emp_status_id, emp_first_name FROM pro_emp_personal_details WHERE tbs_pro_emp_id = $1`,
@@ -330,7 +371,7 @@ const postAd = async (req, res) => {
             }
 
             const employee = employeeResult.rows[0];
-            const isActive = employee.emp_status_id === 1 && employee.emp_status.toLowerCase() === 'active';
+            const isActive = employee.emp_status_id === 2 && employee.emp_status.toLowerCase() === 'active';
             employeeName = employee.emp_first_name || 'Unknown';
 
             if (!isActive) {
@@ -352,7 +393,6 @@ const postAd = async (req, res) => {
             return res.status(400).json({ message: 'Invalid user ID type' });
         }
 
-        // Insert advertisement into advertisements_tbl and get the generated ID
         const insertAds = `
             INSERT INTO advertisements_tbl (
                 client_details, ad_title, start_date, end_date, ad_description, usage_per_day, ads_status, 
@@ -363,19 +403,29 @@ const postAd = async (req, res) => {
             ) RETURNING tbs_ad_id
         `;
         const values = [
-            client_details, ad_title, start_date, end_date, ad_description, usage_per_day, ads_status, 
-            uploadAdUrl, ad_file_size, ad_file_type, ads_status_id, tbs_client_id, page_id, page_name, 
+            client_details, ad_title, start_date, end_date, ad_description, usage_per_day, ads_status,
+            uploadAdUrl, ad_file_size, ad_file_type, ads_status_id, tbs_client_id, page_id, page_name,
             tbs_user_id, hours, duration, ads_plan_id, ads_req_status, ads_req_status_id
         ];
         const result = await pool.query(insertAds, values);
         tbs_ad_id = result.rows[0].tbs_ad_id;
 
-        // Add the tbs_ad_id to the respective user table
         if (tbs_user_id.startsWith('tbs-pro_emp')) {
             await pool.query(
                 `UPDATE pro_emp_personal_details SET advertisements = array_append(advertisements, $1) WHERE tbs_pro_emp_id = $2`,
                 [tbs_ad_id, tbs_user_id]
             );
+
+            const notificationMessage = `${employeeName} employee requested new ${ad_title} advertisement`;
+            await pool.query(
+                `INSERT INTO Product_Owner_Notification (
+                    tbs_pro_notif_id, tbs_user_id, user_name, user_type, subject_name,
+                    module_name, notification_message, read
+                ) VALUES (CONCAT('tbs-notif', nextval('notif_id_seq')), $1, $2, $3, $4, $5, $6, $7)`,
+                [tbs_user_id, employeeName, 'product_owner_employee', ad_title, 'advertisement', notificationMessage, false]
+            );
+
+            console.log('Notification sent:', notificationMessage);
         } else if (tbs_user_id.startsWith('tbs-pro')) {
             await pool.query(
                 `UPDATE product_owner_tbl SET advertisements = array_append(advertisements, $1) WHERE owner_id = $2`,
@@ -389,9 +439,7 @@ const postAd = async (req, res) => {
         console.error('Error:', error);
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
-};
-
-
+}
 
 //UPDATE ADVERTISEMENT BY ID
 const putAds = async (req, res) => {
@@ -460,7 +508,7 @@ const searchAdvertisements = async (req, res) => {
         let query;
         let queryParams = [];
 
-        const searchTerm = req.params.searchTerm;
+        const { searchTerm, tbs_user_id  } = req.params;
 
         if (searchTerm && typeof searchTerm === 'string') {
             const searchValue = `%${searchTerm.toLowerCase()}%`;
@@ -478,17 +526,17 @@ const searchAdvertisements = async (req, res) => {
                     client_company_details c 
                 ON 
                     a.tbs_client_id = c.tbs_client_id
-                WHERE LOWER(a.client_details) LIKE $1
-                   OR LOWER(a.ad_title) LIKE $1
-                   OR (TO_CHAR(a.start_date, 'Mon') || ' ' || TO_CHAR(a.start_date, 'DD')) ILIKE $1
-                   OR (TO_CHAR(a.end_date, 'Mon') || ' ' || TO_CHAR(a.end_date, 'DD')) ILIKE $1
-                   OR LOWER(a.ads_status) LIKE $1
-                   OR LOWER(c.web_url) LIKE $1
-                   OR LOWER(c.emailid) LIKE $1
-                   OR c.phone::text LIKE $1
+                WHERE tbs_user_id = $1 AND (LOWER(a.client_details) LIKE $2
+                   OR LOWER(a.ad_title) LIKE $2
+                   OR (TO_CHAR(a.start_date, 'Mon') || ' ' || TO_CHAR(a.start_date, 'DD')) ILIKE $2
+                   OR (TO_CHAR(a.end_date, 'Mon') || ' ' || TO_CHAR(a.end_date, 'DD')) ILIKE $2
+                   OR LOWER(a.ads_status) LIKE $2
+                   OR LOWER(c.web_url) LIKE $2
+                   OR LOWER(c.emailid) LIKE $2
+                   OR c.phone::text LIKE $2)
             `;
 
-            queryParams = [searchValue];
+            queryParams = [tbs_user_id, searchValue];
         } else {
             query = `
                 SELECT *
@@ -554,5 +602,5 @@ const getLiveAdvertisements = async (req, res) => {
   }
 
 
-module.exports = {getAd, getAdbyId, deleteAd, postAd, putAds, searchAdvertisements, getClientRecords, getClientDetails, getAdbyStatus, getCombinedData, getRecentAds, getActiveAds, getLiveAdvertisements, getActiveClients }
+module.exports = {getAd, getAdbyId, deleteAd, postAd, putAds, searchAdvertisements, getClientRecords, getClientDetails, getAdbyStatus, getCombinedData, getRecentAds, getActiveAds, getLiveAdvertisements, getActiveClients, getAdbyUserId }
 

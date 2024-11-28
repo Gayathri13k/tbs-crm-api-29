@@ -121,34 +121,39 @@ const searchReqOperators = async (req, res) => {
     try {
         const { req_status_id, search_term } = req.body;
         const searchTerm = search_term ? search_term.toLowerCase() : '';
-        const statusId = req_status_id ? req_status_id : '';
-
         let query = `
             SELECT *
             FROM operators_tbl AS o
             LEFT JOIN operator_details AS od ON o.tbs_operator_id = od.tbs_operator_id
+            WHERE 1=1
         `;
         let queryParams = [];
         let paramIndex = 1;
 
-        // Filter by req_status_id if provided
-        if (statusId) {
-            query += ` WHERE o.req_status_id = $${paramIndex}`;
-            queryParams.push(statusId);
-            paramIndex++;
+        if (req_status_id) {
+            if (req_status_id == 7) {
+                query += ` AND o.req_status_id IN (1, 4, 5, 6)`;
+            } else {
+                query += ` AND o.req_status_id = $${paramIndex}`;
+                queryParams.push(req_status_id);
+                paramIndex++;
+            }
         }
 
-        // Filter by search term in owner_name, phone, or emailid
         if (searchTerm) {
-            query += statusId ? ' AND' : ' WHERE';
-            query += ` (LOWER(owner_name) LIKE $${paramIndex} OR phone::text LIKE $${paramIndex} OR LOWER(emailid) LIKE $${paramIndex})`;
+            query += ` AND (
+                LOWER(owner_name) LIKE $${paramIndex} 
+                OR phone::text LIKE $${paramIndex} 
+                OR LOWER(emailid) LIKE $${paramIndex}
+            )`;
             queryParams.push(`%${searchTerm}%`);
         }
+
+        query += ` ORDER BY o.owner_name ASC`; 
 
         const { rows } = await pool.query(query, queryParams);
 
         return res.status(200).json(rows);
-
     } catch (error) {
         console.error('Error:', error.message);
         return res.status(500).json({ error: 'Internal server error' });
@@ -158,33 +163,43 @@ const searchReqOperators = async (req, res) => {
 //request management-OPERATORS FILTER-BY-DATE CONTROLLER
 const reqFilterByDate = async (req, res) => {
     try {
-        let query;
+        let query = `
+            SELECT o.*, od.*
+            FROM operators_tbl AS o
+            LEFT JOIN operator_details AS od ON o.tbs_operator_id = od.tbs_operator_id
+        `;
         let queryParams = [];
-        
-        const { from, to } = req.body;
-        
+        let conditions = [];
+
+        const { from, to, req_status_id } = req.body;
+
         if (from && to) {
-            query = `
-                SELECT o.*, od.*
-                FROM operators_tbl AS o
-                LEFT JOIN operator_details AS od ON o.tbs_operator_id = od.tbs_operator_id
-                WHERE o.created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'
-                ORDER BY o.created_date ASC
-            `;
-            queryParams = [from, to];
-        } else {
-            query = `
-                SELECT o.*, od.*
-                FROM operators_tbl AS o
-                LEFT JOIN operator_details AS od ON o.tbs_operator_id = od.tbs_operator_id
-                ORDER BY o.created_date ASC
-            `;
+            conditions.push(`
+                o.created_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}::DATE + INTERVAL '1 day' - INTERVAL '1 second'
+            `);
+            queryParams.push(from, to);
         }
-        
+
+        if (req_status_id) {
+            if (req_status_id == 7) {
+                conditions.push(`o.req_status_id IN (1, 4, 5, 6)`);
+            } else {
+                conditions.push(`o.req_status_id = $${queryParams.length + 1}`);
+                queryParams.push(req_status_id);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` WHERE ` + conditions.join(' AND ');
+        }
+
+        query += ` ORDER BY o.created_date ASC`;
+
         const result = await pool.query(query, queryParams);
+
         res.json(result.rows);
     } catch (err) {
-        console.error('Error executing query', err);
+        console.error('Error executing query:', err);
         res.status(501).json({ message: "Error searching records" });
     }
 }
@@ -268,33 +283,43 @@ const getRequestByStatusPartner = async (req, res) => {
 //request management-PARTNERS FILTER-BY-DATE CONTROLLER
 const reqFilterByDatePartners = async (req, res) => {
     try {
-        let query;
+        let query = `
+            SELECT pd.*, pdoc.*
+            FROM partner_details AS pd
+            LEFT JOIN partner_documents AS pdoc ON pd.tbs_partner_id = pdoc.tbs_partner_id
+        `;
         let queryParams = [];
-        
-        const { from, to } = req.body;
-        
+        let conditions = [];
+
+        const { from, to, req_status_id } = req.body;
+
         if (from && to) {
-            query = `
-                SELECT pd.*, pdoc.*
-                FROM partner_details AS pd
-                LEFT JOIN partner_documents AS pdoc ON pd.tbs_partner_id = pdoc.tbs_partner_id
-                WHERE pd.joining_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'
-                ORDER BY pd.joining_date ASC
-            `;
-            queryParams = [from, to];
-        } else {
-            query = `
-                SELECT pd.*, pdoc.*
-                FROM partner_details AS pd
-                LEFT JOIN partner_documents AS pdoc ON pd.tbs_partner_id = pdoc.tbs_partner_id
-                ORDER BY pd.joining_date ASC
-            `;
+            conditions.push(`
+                pd.joining_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}::DATE + INTERVAL '1 day' - INTERVAL '1 second'
+            `);
+            queryParams.push(from, to);
         }
 
+        if (req_status_id) {
+            if (req_status_id == 7) {
+                conditions.push(`pd.req_status_id IN (1, 4, 5, 6)`);
+            } else {
+                conditions.push(`pd.req_status_id = $${queryParams.length + 1}`);
+                queryParams.push(req_status_id);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` WHERE ` + conditions.join(' AND ');
+        }
+
+        query += ` ORDER BY pd.joining_date ASC`;
+
         const result = await pool.query(query, queryParams);
+
         res.status(200).json(result.rows);
     } catch (err) {
-        console.error('Error executing query', err.stack);
+        console.error('Error executing query:', err.stack);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 }
@@ -304,10 +329,8 @@ const searchReqPartners = async (req, res) => {
     try {
         const { req_status_id, search_term } = req.body;
         const searchTerm = search_term ? search_term.toLowerCase() : '';
-        const statusFilter = req_status_id ? req_status_id.toLowerCase() : '';
-
         let query = `
-            SELECT *
+            SELECT pd.*, pdoc.*
             FROM partner_details AS pd
             LEFT JOIN partner_documents AS pdoc ON pd.tbs_partner_id = pdoc.tbs_partner_id
             WHERE 1=1
@@ -315,36 +338,36 @@ const searchReqPartners = async (req, res) => {
         let queryParams = [];
         let paramIndex = 1;
 
-        // Filter by status if provided and not "all"
-        if (statusFilter && statusFilter !== 'all') {
-            query += ` AND pd.req_status_id = $${paramIndex}`;
-            queryParams.push(statusFilter);
-            paramIndex++;
+        if (req_status_id) {
+            if (req_status_id == 7) {
+                query += ` AND pd.req_status_id IN (1, 4, 5, 6)`;
+            } else {
+                query += ` AND pd.req_status_id = $${paramIndex}`;
+                queryParams.push(req_status_id);
+                paramIndex++;
+            }
         }
 
-        // Filter by search term in partner_first_name, partner_last_name, phone, or emailid
         if (searchTerm) {
-            query += ` AND (LOWER(pd.partner_first_name) LIKE $${paramIndex} 
-                        OR LOWER(pd.partner_last_name) LIKE $${paramIndex} 
-                        OR pd.phone::text LIKE $${paramIndex} 
-                        OR LOWER(pd.emailid) LIKE $${paramIndex})`;
+            query += ` AND (
+                LOWER(pd.partner_first_name) LIKE $${paramIndex} 
+                OR LOWER(pd.partner_last_name) LIKE $${paramIndex} 
+                OR pd.phone::text LIKE $${paramIndex} 
+                OR LOWER(pd.emailid) LIKE $${paramIndex}
+            )`;
             queryParams.push(`%${searchTerm}%`);
         }
 
+        query += ` ORDER BY pd.partner_first_name ASC`; 
+
         const { rows } = await pool.query(query, queryParams);
 
-        if (rows.length === 0) {
-            return res.status(201).json(rows);
-        }
-
         res.status(200).json(rows);
-
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-};
-
+}
 
 // request_management-PARTNERS PUT status & status_id CONTROLLER
 const putReq_StatusPartner = async (req, res) => {
@@ -481,7 +504,6 @@ const searchOffersDeals = async (req, res) => {
     try {
         const { req_status_id, search_term } = req.body;
         const searchTerm = search_term ? search_term.toLowerCase() : '';
-        const statusFilter = req_status_id ? req_status_id.toLowerCase() : '';
 
         console.log('Search Term:', searchTerm);
         console.log('Status Filter:', statusFilter);
@@ -494,10 +516,14 @@ const searchOffersDeals = async (req, res) => {
         let queryParams = [];
         let paramIndex = 1;
 
-        if (statusFilter && statusFilter !== 'all') {
-            query += ` AND req_status_id = $${paramIndex}`;
-            queryParams.push(statusFilter);
-            paramIndex++;
+        if (req_status_id) {
+            if (req_status_id == 7) {
+                query += ` AND req_status_id IN (1, 2, 3, 5)`;
+            } else {
+                query += ` AND req_status_id = $${paramIndex}`;
+                queryParams.push(req_status_id);
+                paramIndex++;
+            }
         }
 
         if (searchTerm) {
@@ -681,26 +707,35 @@ const getAdvertisementsByStatus = async (req, res) => {
 // FILTER by Date Controller for Advertisements
 const filterAdvertisementsByDate = async (req, res) => {
     try {
-        let query;
+        let query = `
+            SELECT *
+            FROM advertisements_tbl
+            WHERE 1=1
+        `;
         let queryParams = [];
+        let conditions = []; 
         
-        const { from, to } = req.body;
+        const { from, to, ads_req_status_id } = req.body;
         
         if (from && to) {
-            query = `
-                SELECT *
-                FROM advertisements_tbl
-                WHERE created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'
-                ORDER BY created_date ASC
-            `;
-            queryParams = [from, to];
-        } else {
-            query = `
-                SELECT *
-                FROM advertisements_tbl
-                ORDER BY created_date ASC
-            `;
+            conditions.push(`created_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}::DATE + INTERVAL '1 day' - INTERVAL '1 second'`);
+            queryParams.push(from, to);
         }
+        
+        if (ads_req_status_id) {
+            if (ads_req_status_id == 5) {
+                conditions.push(`ads_req_status_id != 0`);
+            } else {
+                conditions.push(`ads_req_status_id = $${queryParams.length + 1}`);
+                queryParams.push(ads_req_status_id);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` AND ${conditions.join(' AND ')}`;
+        }
+
+        query += ` ORDER BY created_date ASC`;
 
         const result = await pool.query(query, queryParams);
         res.status(200).json(result.rows);
@@ -710,15 +745,12 @@ const filterAdvertisementsByDate = async (req, res) => {
     }
 }
 
+
 // SEARCH Controller for Advertisements
 const searchAdvertisements = async (req, res) => {
     try {
         const { ads_req_status_id, search_term } = req.body;
         const searchTerm = search_term ? search_term.toLowerCase() : '';
-        const statusFilter = ads_req_status_id ? ads_req_status_id.toLowerCase() : '';
-
-        console.log('Search Term:', searchTerm);
-        console.log('Status Filter:', statusFilter);
 
         let query = `
             SELECT *
@@ -729,10 +761,20 @@ const searchAdvertisements = async (req, res) => {
         let paramIndex = 1;
 
         // Filter by status if provided and not "all"
-        if (statusFilter && statusFilter !== 'all') {
-            query += ` AND ads_req_status_id = $${paramIndex}`;
-            queryParams.push(statusFilter);
-            paramIndex++;
+        // if (statusFilter && statusFilter !== 'all') {
+        //     query += ` AND ads_req_status_id = $${paramIndex}`;
+        //     queryParams.push(statusFilter);
+        //     paramIndex++;
+        // }
+
+        if (ads_req_status_id) {
+            if (ads_req_status_id == 5) {
+                query += ` AND ads_req_status_id != 0`;
+            } else {
+                query += ` AND ads_req_status_id = $${paramIndex}`;
+                queryParams.push(ads_req_status_id);
+                paramIndex++;
+            }
         }
 
         // Filter by search term if provided
@@ -817,7 +859,7 @@ const updateAdvertisementStatus = async (req, res) => {
 
             const user_name = empResult.rows[0].emp_first_name;
 
-            const notificationMessage = `Web advertisement ${ad_title} status created by ${user_name} is now ${req_status}`;
+            const notificationMessage = `Web advertisement ${ad_title} status created by ${user_name} is now ${ads_req_status}`;
 
             const insertNotification = `
                 INSERT INTO pro_emp_notification (tbs_pro_emp_notif_id, tbs_user_id, user_name, user_type, subject_name, module_name, notification_message, read, tbs_pro_emp_id)
@@ -920,26 +962,35 @@ const getMobileAdvertisementsByStatus = async (req, res) => {
 // FILTER by Date Controller for Mobile Advertisements
 const filterMobileAdvertisementsByDate = async (req, res) => {
     try {
-        let query;
+        let query = `
+            SELECT *
+            FROM mobile_advertisements_tbl
+            WHERE 1=1
+        `;
         let queryParams = [];
+        let conditions = []; 
         
-        const { from, to } = req.body;
-        
+        const { from, to, ads_req_status_id } = req.body;
+       
         if (from && to) {
-            query = `
-                SELECT *
-                FROM mobile_advertisements_tbl
-                WHERE created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'
-                ORDER BY created_date ASC
-            `;
-            queryParams = [from, to];
-        } else {
-            query = `
-                SELECT *
-                FROM mobile_advertisements_tbl
-                ORDER BY created_date ASC
-            `;
+            conditions.push(`created_date BETWEEN $${queryParams.length + 1} AND $${queryParams.length + 2}::DATE + INTERVAL '1 day' - INTERVAL '1 second'`);
+            queryParams.push(from, to);
         }
+       
+        if (ads_req_status_id) {
+            if (ads_req_status_id == 5) {
+                conditions.push(`ads_req_status_id != 0`);
+            } else {
+                conditions.push(`ads_req_status_id = $${queryParams.length + 1}`);
+                queryParams.push(ads_req_status_id);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` AND ${conditions.join(' AND ')}`;
+        }
+
+        query += ` ORDER BY created_date ASC`;
 
         const result = await pool.query(query, queryParams);
         res.status(200).json(result.rows);
@@ -949,15 +1000,12 @@ const filterMobileAdvertisementsByDate = async (req, res) => {
     }
 }
 
+
 // SEARCH Controller for Mobile Advertisements
 const searchMobileAdvertisements = async (req, res) => {
     try {
         const { ads_req_status_id, search_term } = req.body;
         const searchTerm = search_term ? search_term.toLowerCase() : '';
-        const statusFilter = ads_req_status_id ? ads_req_status_id.toLowerCase() : '';
-
-        console.log('Search Term:', searchTerm);
-        console.log('Status Filter:', statusFilter);
 
         let query = `
             SELECT *
@@ -968,10 +1016,14 @@ const searchMobileAdvertisements = async (req, res) => {
         let paramIndex = 1;
 
         // Filter by status if provided and not "all"
-        if (statusFilter && statusFilter !== 'all') {
-            query += ` AND ads_req_status_id = $${paramIndex}`;
-            queryParams.push(statusFilter);
-            paramIndex++;
+        if (ads_req_status_id) {
+            if (ads_req_status_id == 5) {
+                query += ` AND ads_req_status_id != 0`;
+            } else {
+                query += ` AND ads_req_status_id = $${paramIndex}`;
+                queryParams.push(ads_req_status_id);
+                paramIndex++;
+            }
         }
 
         // Filter by search term if provided
@@ -979,9 +1031,6 @@ const searchMobileAdvertisements = async (req, res) => {
             query += ` AND (LOWER(mobad_title) LIKE $${paramIndex} OR LOWER(mobad_description) LIKE $${paramIndex} OR LOWER(client_details) LIKE $${paramIndex})`;
             queryParams.push(`%${searchTerm}%`);
         }
-
-        console.log('Executing query:', query);
-        console.log('With parameters:', queryParams);
 
         const { rows } = await pool.query(query, queryParams);
 
@@ -1058,7 +1107,7 @@ const updateMobileAdvertisementStatus = async (req, res) => {
             const notificationMessage = `Mobile advertisement ${mobad_title} status created by ${user_name} is now ${ads_req_status}`;
 
             const insertNotification = `
-                INSERT INTO pro_emp_notification (tbs_pro_emp_notif_id, tbs_user_id, user_name, user_type, subject_name, module_name, notification_message, read, tbs_pro_emp_idf)
+                INSERT INTO pro_emp_notification (tbs_pro_emp_notif_id, tbs_user_id, user_name, user_type, subject_name, module_name, notification_message, read, tbs_pro_emp_id)
                 VALUES (CONCAT('tbs-pro-emp-notif', nextval('pro_emp_notification_seq')), $1, $2, $3, $4, $5, $6, $7, $8)
             `;
             const notifValues = [

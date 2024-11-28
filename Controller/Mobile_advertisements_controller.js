@@ -67,6 +67,31 @@ const getMobAdbyId = async (req, res) => {
     }
 };
 
+//GET ADVERTISEMENT BY USER ID
+const getMobAdbyUserId = async (req, res) => {
+    try{
+        const { tbs_user_id } = req.params;
+        const getAdUserId = ` SELECT m.*, 
+                            c.owner_name, 
+                            c.emailid, 
+                            c.phone,
+                            c.web_url 
+                        FROM 
+                            mobile_advertisements_tbl m
+                        JOIN 
+                            client_company_details c 
+                        ON 
+                            m.tbs_client_id = c.tbs_client_id WHERE m.tbs_user_id = $1`;
+
+        const result = await pool.query(getAdUserId,[tbs_user_id]);
+
+        res.status(200).send(result.rows);
+    } catch(err) {
+        console.log(err.message);
+        res.status(500).send("Error getting records");
+    }
+}
+
 //GET CLIENT RECORDS FOR DROPDOWN
 const getClientRecordsMob = async (req, res) => {
     try{
@@ -178,10 +203,6 @@ const postMobAd = async (req, res) => {
         return res.status(400).send('File size exceeded (Max: 15MB)');
     }
 
-    // if (req.file && !['image/jpeg', 'image/jpg', 'image/png', 'video/mp4', 'image/gif'].includes(req.file.mimetype)) {
-    //     return res.status(400).send('Only .jpeg, .jpg, .png, .mp4, and .gif files are allowed');
-    // }
-
     const uploadMobAdUrl = req.file ? `/mobile_advertisement_files/${req.file.filename}` : null;
     const mobad_file_size = req.file ? req.file.size : null;
     const mobad_file_type = req.file ? req.file.mimetype : null;
@@ -190,9 +211,9 @@ const postMobAd = async (req, res) => {
 
     let employeeName = '';
     let isActive = false;
+    let tbs_mobad_id;
 
     if (tbs_user_id.startsWith('tbs-pro_emp')) {
-      
         try {
             const employeeResult = await pool.query(
                 `SELECT * FROM pro_emp_personal_details WHERE tbs_pro_emp_id = $1`,
@@ -204,14 +225,13 @@ const postMobAd = async (req, res) => {
             }
 
             const employee = employeeResult.rows[0];
-            isActive = employee.emp_status_id === 1 && employee.emp_status.toLowerCase() === 'active';
+            isActive = employee.emp_status_id === 2 && employee.emp_status.toLowerCase() === 'Active';
             employeeName = employee.emp_first_name || 'Unknown';
         } catch (error) {
             return res.status(500).json({ message: 'Database error', error });
         }
 
     } else if (tbs_user_id.startsWith('tbs-pro')) {
-       
         try {
             const ownerResult = await pool.query(
                 `SELECT * FROM product_owner_tbl WHERE owner_id = $1`,
@@ -224,7 +244,7 @@ const postMobAd = async (req, res) => {
 
             const owner = ownerResult.rows[0];
             employeeName = owner.owner_name || 'Unknown';
-            isActive = true; 
+            isActive = true;
         } catch (error) {
             return res.status(500).json({ message: 'Database error', error });
         }
@@ -238,7 +258,6 @@ const postMobAd = async (req, res) => {
     }
 
     if (tbs_client_id) {
-        
         try {
             const clientResult = await pool.query(
                 `SELECT * FROM client_company_details WHERE tbs_client_id = $1`,
@@ -251,7 +270,7 @@ const postMobAd = async (req, res) => {
 
             const client = clientResult.rows[0];
             employeeName = client.owner_name || 'Unknown';
-            isActive = true; 
+            isActive = true;
         } catch (error) {
             return res.status(500).json({ message: 'Database error', error });
         }
@@ -265,6 +284,7 @@ const postMobAd = async (req, res) => {
                 page_id, page_name, tbs_client_id, tbs_user_id, hours, duration, ads_plan_id,
                 ads_req_status, ads_req_status_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            RETURNING tbs_mobad_id
         `;
         const values = [
             client_details, mobad_title, start_date, end_date, mobad_description, usage_per_day,
@@ -272,10 +292,16 @@ const postMobAd = async (req, res) => {
             tbs_client_id, tbs_user_id, hours, duration, ads_plan_id, ads_req_status, ads_req_status_id
         ];
 
-        await pool.query(insertAds, values);
-        res.send("Inserted Successfully!");
+        const result = await pool.query(insertAds, values);
+        tbs_mobad_id = result.rows[0].tbs_mobad_id;
 
+        // Update advertisements array for the user
         if (tbs_user_id.startsWith('tbs-pro_emp')) {
+            await pool.query(
+                `UPDATE pro_emp_personal_details SET mobile_ads = array_append(mobile_ads, $1) WHERE tbs_pro_emp_id = $2`,
+                [tbs_mobad_id, tbs_user_id]
+            );
+
             const notificationMessage = `${employeeName} employee requested new ${mobad_title} mobile advertisement`;
             await pool.query(
                 `INSERT INTO Product_Owner_Notification (
@@ -284,14 +310,23 @@ const postMobAd = async (req, res) => {
                 ) VALUES (CONCAT('tbs-notif', nextval('notif_id_seq')), $1, $2, $3, $4, $5, $6, $7)`,
                 [tbs_user_id, employeeName, 'product_owner_employee', mobad_title, 'mobile_advertisement', notificationMessage, false]
             );
+
             console.log('Notification sent:', notificationMessage);
+        } else if (tbs_user_id.startsWith('tbs-pro')) {
+            await pool.query(
+                `UPDATE product_owner_tbl SET mobile_ads = array_append(mobile_ads, $1) WHERE owner_id = $2`,
+                [tbs_mobad_id, tbs_user_id]
+            );
         }
+
+        res.send("Inserted Successfully!");
 
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
-}
+};
+
 
 //UPDATE ADVERTISEMENT BY ID
 const putMobAds = async (req, res) => {
@@ -354,13 +389,13 @@ const searchMobAdvertisements = async (req, res) => {
         let query;
         let queryParams = [];
 
-        const searchTerm = req.params.searchTerm;
+        const { searchTerm, tbs_user_id } = req.params;
 
         if (searchTerm && typeof searchTerm === 'string') {
             const searchValue = `%${searchTerm.toLowerCase()}%`;
 
             query = `
-                    SELECT 
+                SELECT 
                     a.*, 
                     c.owner_name, 
                     c.emailid, 
@@ -372,31 +407,36 @@ const searchMobAdvertisements = async (req, res) => {
                     client_company_details c 
                 ON 
                     a.tbs_client_id = c.tbs_client_id
-                WHERE LOWER(a.client_details) LIKE $1
-                   OR LOWER(a.mobad_title) LIKE $1
-                   OR (TO_CHAR(a.start_date, 'Mon') || ' ' || TO_CHAR(a.start_date, 'DD')) ILIKE $1
-                   OR (TO_CHAR(a.end_date, 'Mon') || ' ' || TO_CHAR(a.end_date, 'DD')) ILIKE $1
-                   OR LOWER(a.ads_status) LIKE $1
-                   OR LOWER(c.web_url) LIKE $1
-                   OR LOWER(c.emailid) LIKE $1
-                   OR c.phone::text LIKE $1
+                WHERE 
+                    a.tbs_user_id = $1 AND (
+                        LOWER(a.client_details) LIKE $2 OR
+                        LOWER(a.mobad_title) LIKE $2 OR
+                        (TO_CHAR(a.start_date, 'Mon') || ' ' || TO_CHAR(a.start_date, 'DD')) ILIKE $2 OR
+                        (TO_CHAR(a.end_date, 'Mon') || ' ' || TO_CHAR(a.end_date, 'DD')) ILIKE $2 OR
+                        LOWER(a.ads_status) LIKE $2 OR
+                        LOWER(c.web_url) LIKE $2 OR
+                        LOWER(c.emailid) LIKE $2 OR
+                        c.phone::text LIKE $2
+                    )
             `;
 
-            queryParams = [searchValue];
-        } else {
-            query = `
-                SELECT *
-                FROM advertisements_tbl
-            `;
+            queryParams = [tbs_user_id, searchValue];
+        } else { 
+            return res.json([]);
         }
 
         const result = await pool.query(query, queryParams);
+
+        if (result.rows.length === 0) {
+            return res.json([]); 
+        }
+
         res.json(result.rows);
     } catch (err) {
         console.error('Error executing query', err);
         res.status(500).send('Error searching records');
     }
-};
+}
 
 // GET RECENTLY ADDED MOBILE ADVERTISEMENTS
 const getRecentMobAds = async (req, res) => {
@@ -435,6 +475,6 @@ const getLiveMobAdvertisements = async (req, res) => {
     }
   }
 
-module.exports = { getMobAd, getMobAdbyId,deleteMobAd,postMobAd, putMobAds, searchMobAdvertisements, getClientRecordsMob, getClientDetailsMob, getCombinedDataMob, getMobAdbyStatus, getRecentMobAds, getLiveMobAdvertisements }
+module.exports = { getMobAd, getMobAdbyId,deleteMobAd,postMobAd, putMobAds, searchMobAdvertisements, getClientRecordsMob, getClientDetailsMob, getCombinedDataMob, getMobAdbyStatus, getRecentMobAds, getLiveMobAdvertisements, getMobAdbyUserId }
 
 

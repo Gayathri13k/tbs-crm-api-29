@@ -24,6 +24,10 @@ const postCrudPermissions = async (req, res) => {
     const { crud_permission_id } = req.params;
     const { crud_permissions, module_permissions } = req.body;
 
+    if (!Number.isInteger(Number(crud_permission_id))) {
+        return res.status(400).json({ error: 'crud_permission_id must be an integer' });
+    }
+
     if (!crud_permissions || !Array.isArray(crud_permissions)) {
         return res.status(400).json({ error: 'crud_permissions must be an array' });
     }
@@ -36,6 +40,12 @@ const postCrudPermissions = async (req, res) => {
     } catch (err) {
         return res.status(400).json({ error: 'Invalid module_permissions format' });
     }
+
+    console.log({
+        crud_permissions,
+        parsedModulePermissions,
+        crud_permission_id
+    });
 
     const updateCrudPermissionsQuery = `
         UPDATE public.active_crud_permissions_tbl
@@ -499,7 +509,7 @@ const putPermission = async (req, res) => {
                 crud_permissions = COALESCE($4::TEXT[], crud_permissions),
                 module_permissions = COALESCE($5::JSONB, module_permissions),
                 tbs_user_id = COALESCE($6, tbs_user_id),
-                "user" = COALESCE($7, "user")
+                "user" = COALESCE($7, "user"), updated_date = now()
             WHERE permission_id = $8 `;
 
         const values = [

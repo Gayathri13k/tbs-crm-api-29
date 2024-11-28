@@ -420,117 +420,98 @@ const getClientDetails = async (req, res) => {
 const ExcelUpload = async (req, res) => {
     const file = req.file;
     if (!file) {
-      return res.status(400).send('No file uploaded.');
+        return res.status(400).send('No file uploaded.');
     }
-  
-    const workbook = xlsx.readFile(file.path);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const data = xlsx.utils.sheet_to_json(sheet);
-  
+
     try {
-      await pool.query('BEGIN');
-  
-      for (const row of data) {
-        const clientData = [
-          row['company_name'],
-          row['owner_name'],
-          row['phone'],
-          row['emailid'],
-          row['type_of_constitution'],
-          row['business_background'],
-          row['web_url'],
-          row['status'],
-          row['status_id']
-        ];
-  
-        const result = await pool.query(
-          `INSERT INTO client_company_details (
-            company_name, owner_name, phone, emailid, 
-            type_of_constitution, business_background, web_url, type_name, 
-            type_id, password, status, status_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'CLIENT', 'CLT101', '', $8, $9)
-          RETURNING tbs_client_id`,
-          clientData
-        );
-  
-        const tbs_client_id = result.rows[0].tbs_client_id;
+        const workbook = xlsx.readFile(file.path);
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const data = xlsx.utils.sheet_to_json(sheet);
 
-            const password = `CLT@${tbs_client_id}`;
+        console.log('Parsed Data:', data);
 
-            await pool.query(
-                `UPDATE client_company_details
-                SET password = $1
-                WHERE tbs_client_id = $2`,
-                [password, tbs_client_id]
-            )
-  
-        const addressData = [
-          tbs_client_id,
-          row['address'],
-          row['state'],
-          row['state_id'],
-          row['region'],
-          row['region_id'],
-          row['city'],
-          row['city_id'],
-          row['country'],
-          row['country_id'],
-          row['zip_code'],
-        ];
-  
-        const gstData = [
-          tbs_client_id,
-          row['has_gstin'],
-          row['aggregate_turnover_exceeded'],
-          row['state_name'],
-          row['state_code_number'],
-          row['gstin'],
-          row['head_office'],
-        ];
-  
-        // Update client_address_details
-        await pool.query(
-          `UPDATE client_address_details
-          SET
-              address = $2,
-              state = $3,
-              state_id = $4,
-              region = $5,
-              region_id = $6,
-              city = $7,
-              city_id = $8,
-              country = $9,
-              country_id = $10,
-              zip_code = $11
-          WHERE tbs_client_id = $1;
-          `,
-          addressData
-        );
-  
-        // Update client_gst_details
-        await pool.query(
-          `UPDATE client_gst_details
-          SET
-              has_gstin = $2,
-              aggregate_turnover_exceeded = $3,
-              state_name = $4,
-              state_code_number = $5,
-              gstin = $6,
-              head_office = $7
-          WHERE tbs_client_id = $1;
-          `,
-          gstData
-        );
-      }
-  
-      await pool.query('COMMIT');
-      res.status(200).send('File uploaded and data inserted/updated successfully.');
+        await pool.query('BEGIN');
+
+        for (const row of data) {
+            try {
+                const clientData = [
+                    row['company_name'], row['owner_name'], row['phone'],
+                    row['emailid'], row['type_of_constitution'],
+                    row['business_background'], row['web_url'],
+                    row['status'], row['status_id']
+                ];
+
+                console.log('Inserting client data:', clientData);
+
+                const result = await pool.query(
+                    `INSERT INTO client_company_details (
+                        company_name, owner_name, phone, emailid,
+                        type_of_constitution, business_background, web_url,
+                        type_name, type_id, password, status, status_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'CLIENT', 'CLT101', '', $8, $9)
+                    RETURNING tbs_client_id`,
+                    clientData
+                );
+
+                const tbs_client_id = result.rows[0].tbs_client_id;
+
+                const password = `CLT@${tbs_client_id}`;
+                console.log('Generated password:', password);
+
+                await pool.query(
+                    `UPDATE client_company_details
+                     SET password = $1
+                     WHERE tbs_client_id = $2`,
+                    [password, tbs_client_id]
+                );
+
+                const addressData = [
+                    tbs_client_id, row['address'], row['state'], row['state_id'],
+                    row['region'], row['region_id'], row['city'], row['city_id'],
+                    row['country'], row['country_id'], row['zip_code']
+                ];
+
+                const gstData = [
+                    tbs_client_id, row['has_gstin'],
+                    row['aggregate_turnover_exceeded'], row['state_name'],
+                    row['state_code_number'], row['gstin'], row['head_office']
+                ];
+
+                console.log('Updating address details:', addressData);
+                await pool.query(
+                    `UPDATE client_address_details
+                     SET address = $2, state = $3, state_id = $4,
+                         region = $5, region_id = $6, city = $7,
+                         city_id = $8, country = $9, country_id = $10,
+                         zip_code = $11
+                     WHERE tbs_client_id = $1;`,
+                    addressData
+                );
+
+                console.log('Updating GST details:', gstData);
+                await pool.query(
+                    `UPDATE client_gst_details
+                     SET has_gstin = $2, aggregate_turnover_exceeded = $3,
+                         state_name = $4, state_code_number = $5,
+                         gstin = $6, head_office = $7
+                     WHERE tbs_client_id = $1;`,
+                    gstData
+                );
+
+            } catch (innerError) {
+                console.error('Error processing row:', row, innerError);
+                throw innerError;
+            }
+        }
+
+        await pool.query('COMMIT');
+        res.status(200).send('File uploaded and data inserted/updated successfully.');
     } catch (error) {
-      await pool.query('ROLLBACK');
-      console.error('Error inserting/updating data:', error);
-      res.status(500).send('Error inserting/updating data.');
+        await pool.query('ROLLBACK');
+        console.error('Transaction failed:', error);
+        res.status(500).send('Error inserting/updating data.');
     }
-  }
+}
 
 module.exports = { postClient, deleteClient, getClientcompany, getclientByID, putClient, updateClientAddress, getClientAddressById, deleteClientAddress, getAllClientAddresses, putClientGst, deleteClientGst, getGstByid, getAllGst, getClientDetails, putClientCompanyDetails, ExcelUpload, GetClientProfileImg, GetClientProfileImgById }

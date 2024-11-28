@@ -892,29 +892,30 @@ const operatorLogin = async (req, res) => {
         let operator;
 
         if (emailid) {
-            const emailResult = await pool.query('SELECT * FROM operators_tbl WHERE emailid = $1', 
-            
-            [emailid])
-            
+            const emailResult = await pool.query(
+                'SELECT * FROM operators_tbl WHERE emailid = $1',
+                [emailid]
+            );
             operator = emailResult.rows[0];
         }
 
-        if (!operator || phone) {
-
-            const phoneResult = await pool.query('SELECT * FROM operators_tbl WHERE phone = $1', 
-
-            [phone])
-
+        if (!operator && phone) {
+            const phoneResult = await pool.query(
+                'SELECT * FROM operators_tbl WHERE phone = $1',
+                [phone]
+            );
             operator = phoneResult.rows[0];
         }
 
         if (!operator) {
+            return res.status(404).json({ error: 'No operator found with provided email/phone' });
+        }
 
-            return res.status(201).json({ error: 'No operator found with provided email/phone' });
+        if (!operator.generate_key || operator.user_status_id !== 2) {
+            return res.status(203).json({ error: 'Operator is not active' });
         }
 
         if (operator.password !== password) {
-
             return res.status(401).json({ error: 'Password incorrect' });
         }
 
@@ -927,18 +928,15 @@ const operatorLogin = async (req, res) => {
         const workbook = XLSX.utils.book_new();
         const worksheetData = [
             ['Email ID', 'Phone Number'],
-            [operator.emailid, operator.phone]
+            [operator.emailid, operator.phone],
         ];
-        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
+        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Operator Details');
 
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Operator Details')
-
-        const safeOwnerName = String(ownerName).replace(/[^a-zA-Z0-9]/g, '_')
-
-        const fileName = `${safeOwnerName}_Login_details.xlsx`
+        const safeOwnerName = String(ownerName).replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `${safeOwnerName}_Login_details.xlsx`;
 
         const filePath = path.join(__dirname, '..', 'operatorslogin_excels', fileName);
-
         XLSX.writeFile(workbook, filePath);
 
         const token = jwt.sign({ operatorId }, process.env.JWT_SECRET_KEY, { expiresIn: '1w' });
@@ -950,10 +948,11 @@ const operatorLogin = async (req, res) => {
             type_name: typeName,
             type_id: typeId,
             token: token,
-            excelFilePath: filePath 
-        })
+            excelFilePath: filePath,
+        });
 
     } catch (error) {
+        console.error('Login error:', error);
         res.status(500).json({ error: error.message });
     }
 }

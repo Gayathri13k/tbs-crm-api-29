@@ -910,54 +910,68 @@ const employeeLoginpro = async (req, res) => {
     const { email_id, phone, password } = req.body;
 
     try {
-        let employee;
+        let employees = [];
 
         if (email_id) {
             const emailResult = await pool.query(
                 'SELECT * FROM pro_emp_personal_details WHERE email_id = $1',
                 [email_id]
             );
-            employee = emailResult.rows[0];
+            employees = emailResult.rows;
         }
 
-        if ((!employee || employee.password !== password) && phone) {
+        if ((!employees.length && phone) || (employees.length && phone)) {
             const phoneResult = await pool.query(
                 'SELECT * FROM pro_emp_personal_details WHERE phone = $1',
                 [phone]
             );
-            employee = phoneResult.rows[0];
+            employees = employees.concat(phoneResult.rows);
         }
+
+        if (!employees.length) {
+            return res.status(404).json({ error: 'No employees found with the provided email/phone' });
+        }
+
+        const employee = employees.find(
+            (emp) => emp.password === password && emp.emp_status === 'Active'
+        );
 
         if (!employee) {
-            return res.status(404).json({ error: 'No employee found with the provided email/phone' });
+            return res.status(203).json({ message: 'Password incorrect or no active employee found' });
         }
 
-        if (employee.password !== password) {
-            return res.status(401).json({ error: 'Password incorrect' });
+        const professionalResult = await pool.query(
+            `SELECT role_type_id 
+             FROM pro_emp_professional_details 
+             WHERE tbs_pro_emp_id = $1`,
+            [employee.tbs_pro_emp_id]
+        );
+
+        if (professionalResult.rows.length === 0) {
+            return res.status(404).json({ error: 'No professional details found for this employee' });
         }
 
-        const employeeId = employee.tbs_op_emp_id;
-        const employeeFirstName = employee.emp_first_name;
-        const employeeLastName = employee.emp_last_name;
-        const typeName = employee.type_name;
-        const typeId = employee.type_id;
-        const tbs_user_id = employee.owner_id
+        const role_id = professionalResult.rows[0].role_type_id;
 
         const permissionsResult = await pool.query(
             `SELECT crud_permissions, module_permissions 
              FROM active_crud_permissions_tbl 
-             WHERE tbs_user_id = $1`,
-            [tbs_user_id]
+             WHERE tbs_user_id = $1 AND role_id = $2`,
+            [employee.owner_id, role_id]
         );
+
         const permissions = permissionsResult.rows[0];
 
-        const token = jwt.sign({ employeeId }, process.env.JWT_SECRET_KEY, { expiresIn: '1w' });
+        const token = jwt.sign({ employeeId: employee.tbs_op_emp_id }, process.env.JWT_SECRET_KEY, {
+            expiresIn: '1w'
+        });
 
         res.json({
-            id: employeeId,
-            user_name: `${employeeFirstName} ${employeeLastName}`,
-            type_name: typeName,
-            type_id: typeId,
+            id: employee.tbs_pro_emp_id,
+            ownerId: employee.owner_id,
+            user_name: `${employee.emp_first_name} ${employee.emp_last_name}`,
+            type_name: employee.type_name,
+            type_id: employee.type_id,
             token,
             crud_permissions: permissions ? permissions.crud_permissions : null,
             module_permissions: permissions ? permissions.module_permissions : null

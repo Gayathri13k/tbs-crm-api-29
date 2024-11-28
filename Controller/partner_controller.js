@@ -607,47 +607,59 @@ const getPartnerAddressById = async (req, res) => {
 
 // partner login
 const partnerLogin = async (req, res) => {
-  const { emailid, phone, password } = req.body
+  const { emailid, phone, password } = req.body;
 
   try {
-      let partner
+      let partners = [];
 
       if (emailid) {
-          const emailResult = await pool.query('SELECT * FROM partner_details WHERE emailid = $1', [emailid])
-          console.log('Email Result:', emailResult.rows)
-          partner = emailResult.rows[0]
+          const emailResult = await pool.query(
+              'SELECT * FROM partner_details WHERE emailid = $1',
+              [emailid]
+          );
+          partners = emailResult.rows;
       }
 
-      if (!partner || phone) {
-          const phoneResult = await pool.query('SELECT * FROM partner_details WHERE phone = $1', [phone])
-          console.log('Phone Result:', phoneResult.rows)
-          partner = phoneResult.rows[0]
+      if (partners.length === 0 && phone) {
+          const phoneResult = await pool.query(
+              'SELECT * FROM partner_details WHERE phone = $1',
+              [phone]
+          );
+          partners = phoneResult.rows;
       }
+
+      if (partners.length === 0) {
+          return res.status(200).json({ message: 'No partner found with provided email/phone' });
+      }
+
+      const partner = partners.find(
+          (partner) => partner.password === password && partner.partner_status === 'Active'
+      );
 
       if (!partner) {
-          return res.status(201).json({ error: 'No partner found with provided email/phone' })
+          return res.status(203).json({
+              message: 'Password incorrect or no active partner found for the provided email/phone',
+          });
       }
 
-      if (partner.password !== password) {
-          return res.status(201).json({ error: 'Password incorrect' })
-      }
+      const partnerId = partner.tbs_partner_id;
+      const partnerFirstName = partner.partner_first_name;
+      const partnerLastName = partner.partner_last_name;
+      const typeName = partner.type_name;
+      const typeId = partner.type_id;
 
-      const partnerId = partner.tbs_partner_id
-      const partnerFirstName = partner.partner_first_name
-      const partnerLastName = partner.partner_last_name
-      const typeName = partner.type_name
-      const typeId = partner.type_id
-      
-      const token = jwt.sign({ partnerId }, process.env.JWT_SECRET_KEY, { expiresIn: '1w' })
+      const token = jwt.sign({ partnerId }, process.env.JWT_SECRET_KEY, { expiresIn: '1w' });
 
-      res.json({ id: partnerId,
-        user_name: partnerFirstName + ' ' + partnerLastName,
-        type_name : typeName,
-        type_id : typeId, 
-        toke: token })
-
+      res.json({
+          id: partnerId,
+          user_name: `${partnerFirstName} ${partnerLastName}`,
+          type_name: typeName,
+          type_id: typeId,
+          token: token,
+      });
   } catch (error) {
-      res.status(200).json({ error: error.message })
+      console.error('Login error:', error);
+      res.status(500).json({ error: error.message });
   }
 }
 

@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const xlsx = require('xlsx')
 const path = require('path');
-const { searchAdvertisements, getAd, getAdbyId, postAd, putAds, deleteAd, getClientRecords, getClientDetails, getAdbyStatus, getCombinedData, getRecentAds, getActiveAds, getLiveAdvertisements, getActiveClients } = require('../Controller/Advertisements_controller');
+const { searchAdvertisements, getAd, getAdbyId, postAd, putAds, deleteAd, getClientRecords, getClientDetails, getAdbyStatus, getCombinedData, getRecentAds, getActiveAds, getLiveAdvertisements, getActiveClients, getAdbyUserId } = require('../Controller/Advertisements_controller');
 
 const advertisementRouter = express.Router();
 
@@ -38,9 +38,10 @@ const ad_upload = multer({
 
 
 //ADVERTISEMENT ROUTES
-advertisementRouter.get('/ads/search/:searchTerm', searchAdvertisements);
+advertisementRouter.get('/ads-search/:tbs_user_id/:searchTerm', searchAdvertisements);
 advertisementRouter.get('/ads', getAd);
 advertisementRouter.get('/ads/:tbs_ad_id', getAdbyId);
+advertisementRouter.get('/ads-userId/:tbs_user_id', getAdbyUserId);
 advertisementRouter.get('/ads-clientRecords', getClientRecords);
 advertisementRouter.get('/ads-clientDetails', getClientDetails);
 advertisementRouter.post('/ads', ad_upload.single('ad_video'), postAd);

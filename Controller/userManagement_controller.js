@@ -58,7 +58,7 @@ const putUser_Status = async (req, res) => {
 
         let generate_key = null;
 
-        if (user_status_id === 1) {
+        if (user_status_id === 2) {
             const owner_name = queryResult.rows[0].owner_name;
             const owner_initials = owner_name.slice(0, 3).toUpperCase();
             const randomDigits = Math.round(Math.random() * 1E13).toString().padStart(13, '0');
@@ -77,7 +77,7 @@ const putUser_Status = async (req, res) => {
             [user_status, user_status_id, generate_key, req_status, req_status_id, tbs_operator_id]
         )
 
-        if (user_status_id === 1) {
+        if (user_status_id === 2) {
             res.status(200).json({
                 message: 'User Status is Active and Key generated successfully',
                 'Generated Key': generate_key

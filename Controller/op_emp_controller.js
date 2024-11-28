@@ -9,7 +9,7 @@ const createEMP = async (req, res, next) => {
 
     const profile_img = req.file ? `/emp_professional_documents/${req.file.filename}` : null;
   
-    if (!emp_first_name || !emp_last_name || !phone || !email_id || !alternate_phone || !date_of_birth || !gender || !blood_group || !role_type || !role_type_id || !tbs_operator_id) {
+    if (!emp_first_name || !emp_last_name || !phone || !email_id || !alternate_phone || !date_of_birth || !gender || !blood_group || !tbs_operator_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
   
@@ -226,8 +226,8 @@ const getAllEMPop = async (req, res) => {
   //employee-peraonal-details GETbyID CONTROLLER
   const getEMP = async (req, res) => {
     try {
-      const result = await pool.query(`SELECT tbs_op_emp_id, emp_first_name,emp_last_name,phone,email_id,alternate_phone,date_of_birth,gender,blood_group, temp_add, temp_country, temp_state, temp_city, temp_zip_code,
-      perm_add, perm_country, perm_state, perm_city, perm_zip_code, profile_img FROM op_emp_personal_details `)
+      const result = await pool.query(`SELECT tbs_op_emp_id, emp_first_name,emp_last_name,phone,email_id,alternate_phone,date_of_birth,gender,blood_group, temp_add, temp_country, temp_state, temp_city, temp_region, temp_zip_code,
+      perm_add, perm_country, perm_state, perm_city, perm_region, perm_zip_code, profile_img FROM op_emp_personal_details `)
       if (result.rows.length === 0) {
         return res.status(201).json({ error: 'Record not found' })
       }
@@ -242,8 +242,8 @@ const getAllEMPop = async (req, res) => {
     const  id = req.params.tbs_op_emp_id
     console.log(id)
     try {
-      const result = await pool.query(`SELECT tbs_op_emp_id, emp_first_name,emp_last_name,phone,email_id,alternate_phone,date_of_birth,gender,blood_group, temp_add, temp_country, temp_state, temp_city, temp_zip_code,
-      perm_add, perm_country, perm_state, perm_city, perm_zip_code, profile_img FROM op_emp_personal_details WHERE tbs_op_emp_id = $1`, [id])
+      const result = await pool.query(`SELECT tbs_op_emp_id, emp_first_name,emp_last_name,phone,email_id,alternate_phone,date_of_birth,gender,blood_group, temp_add, temp_country, temp_state, temp_city, temp_region, temp_zip_code,
+      perm_add, perm_country, perm_state, perm_city, perm_region, perm_zip_code, profile_img FROM op_emp_personal_details WHERE tbs_op_emp_id = $1`, [id])
       if (result.rows.length === 0) {
         return res.status(201).json({ error: 'Record not found' })
       }
@@ -332,11 +332,13 @@ const getAllEmployees = async (req, res) => {
                             temp_country ,
                             temp_state ,
                             temp_city ,
+                            temp_region,
                             temp_zip_code ,
                             perm_add ,
                             perm_country ,
                             perm_state ,
                             perm_city ,
+                            perm_region,
                             perm_zip_code
                     FROM op_emp_personal_details`
         const { rows } = await pool.query(query)
@@ -360,11 +362,13 @@ const getEmployeeById = async (req, res) => {
                             temp_country ,
                             temp_state ,
                             temp_city ,
+                            temp_region,
                             temp_zip_code ,
                             perm_add ,
                             perm_country ,
                             perm_state ,
                             perm_city ,
+                            perm_region,
                             perm_zip_code  
                     FROM op_emp_personal_details WHERE tbs_op_emp_id = $1`
         const { rows } = await pool.query(query, [employeeId])
@@ -409,12 +413,7 @@ const createDetails = async (req, res) => {
 
 //employee-professional-details GET CONTROLLER
 const fetchdata = async (req, res) => {
-
-  const query = `SELECT tbs_op_emp_id, 
-                          joining_date, role_type, role_type_id, designation, branch, language,
-          qualification, department, reporting_manager
-  
-              FROM op_emp_professional_details `
+  const query = `SELECT tbs_op_emp_id, joining_date, role_type, role_type_id, designation, branch, language, qualification, department, reporting_manager FROM op_emp_professional_details `
 
               try {
                   const result = await pool.query(query)
@@ -803,29 +802,34 @@ const employeeLogin = async (req, res) => {
     const { email_id, phone, password } = req.body;
 
     try {
-        let employee;
+        let employees = [];
+
         if (email_id) {
             const emailResult = await pool.query(
                 'SELECT * FROM op_emp_personal_details WHERE email_id = $1',
                 [email_id]
             );
-            employee = emailResult.rows[0];
+            employees = emailResult.rows;
         }
 
-        if ((!employee || employee.password !== password) && phone) {
+        if ((!employees.length && phone) || (employees.length && phone)) {
             const phoneResult = await pool.query(
                 'SELECT * FROM op_emp_personal_details WHERE phone = $1',
                 [phone]
             );
-            employee = phoneResult.rows[0];
+            employees = employees.concat(phoneResult.rows);
         }
+
+        if (!employees.length) {
+            return res.status(404).json({ error: 'No employees found with the provided email/phone' });
+        }
+
+        const employee = employees.find(
+            (emp) => emp.password === password && emp.emp_status_id === 2 
+        );
 
         if (!employee) {
-            return res.status(404).json({ error: 'No employee found with the provided email/phone' });
-        }
-
-        if (employee.password !== password) {
-            return res.status(401).json({ error: 'Password incorrect' });
+            return res.status(203).json({ message: 'Password incorrect or no active employee found' });
         }
 
         const employeeId = employee.tbs_op_emp_id;
@@ -833,20 +837,35 @@ const employeeLogin = async (req, res) => {
         const employeeLastName = employee.emp_last_name;
         const typeName = employee.type_name;
         const typeId = employee.type_id;
-        const tbs_user_id = employee.tbs_operator_id
+        const tbs_user_id = employee.tbs_operator_id;
+
+        const professionalResult = await pool.query(
+            `SELECT role_type_id 
+             FROM op_emp_professional_details 
+             WHERE tbs_op_emp_id = $1`,
+            [employeeId]
+        );
+
+        if (professionalResult.rows.length === 0) {
+            return res.status(404).json({ error: 'No professional details found for this employee' });
+        }
+
+        const role_id = professionalResult.rows[0].role_type_id;
 
         const permissionsResult = await pool.query(
             `SELECT crud_permissions, module_permissions 
              FROM active_permissions_tbl 
-             WHERE tbs_user_id = $1`,
-            [tbs_user_id]
+             WHERE tbs_user_id = $1 AND role_id = $2`,
+            [tbs_user_id, role_id]
         );
+
         const permissions = permissionsResult.rows[0];
 
         const token = jwt.sign({ employeeId }, process.env.JWT_SECRET_KEY, { expiresIn: '1w' });
 
         res.json({
             id: employeeId,
+            operatorId: tbs_user_id,
             user_name: `${employeeFirstName} ${employeeLastName}`,
             type_name: typeName,
             type_id: typeId,
