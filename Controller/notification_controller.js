@@ -3,8 +3,10 @@ const pool = require('../config/db');
 // Get all product_owner notifications
 const notificationGet = async (req, res) => {
     try {
+        // Fetch notifications and unread count
         const notificationQuery = `
-            SELECT * 
+            SELECT tbs_pro_notif_id, tbs_user_id, user_name, user_type, subject_name, module_name, 
+                   notification_message, read, created_at 
             FROM Product_Owner_Notification 
             ORDER BY created_at DESC
         `;
@@ -18,17 +20,56 @@ const notificationGet = async (req, res) => {
         const [notificationResult, unreadCountResult] = await Promise.all([
             pool.query(notificationQuery),
             pool.query(unreadCountQuery)
-        ])
+        ]);
 
+        const notifications = notificationResult.rows;
         const unreadCount = unreadCountResult.rows[0].unread_count;
 
+        const enrichedNotifications = await Promise.all(
+            notifications.map(async (notification) => {
+                const { tbs_user_id } = notification;
+
+                let profileImg = null;
+                if (tbs_user_id.startsWith('tbs-op')) {
+                    const operatorResult = await pool.query(
+                        `SELECT profileimg FROM operators_tbl WHERE tbs_operator_id = $1`,
+                        [tbs_user_id]
+                    );
+                    if (operatorResult.rows.length > 0) {
+                        profileImg = operatorResult.rows[0].profileimg;
+                    }
+                } else if (tbs_user_id.startsWith('tbs-op_emp')) {
+                    const opEmpResult = await pool.query(
+                        `SELECT profile_img FROM op_emp_personal_details WHERE tbs_op_emp_id = $1`,
+                        [tbs_user_id]
+                    );
+                    if (opEmpResult.rows.length > 0) {
+                        profileImg = opEmpResult.rows[0].profile_img;
+                    }
+                } else if (tbs_user_id.startsWith('tbs-pro_emp')) {
+                    const proEmpResult = await pool.query(
+                        `SELECT profile_img FROM pro_emp_personal_details WHERE tbs_pro_emp_id = $1`,
+                        [tbs_user_id]
+                    );
+                    if (proEmpResult.rows.length > 0) {
+                        profileImg = proEmpResult.rows[0].profile_img;
+                    }
+                }
+
+                return {
+                    ...notification,
+                    profile_img: profileImg
+                };
+            })
+        );
+
         res.status(200).json({
-            notifications: notificationResult.rows,
+            notifications: enrichedNotifications,
             unread_count: unreadCount
         });
     } catch (err) {
-        console.error(err);
-        res.status(201).json({ message: 'Internal Server Error' });
+        console.error('Error fetching notifications:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
     }
 }
 
@@ -91,20 +132,60 @@ const searchNotification = async (req, res) => {
     const keyword = req.params.keyword;
 
     if (!keyword) {
-        return res.status(200).json({ message: 'Keyword is required' });
+        return res.status(400).json({ message: 'Keyword is required' });
     }
 
     try {
         const query = `
             SELECT * 
             FROM public.product_owner_notification
-            WHERE notification_message ILIKE '%' || $1 || '%'
-        `;
+            WHERE notification_message ILIKE '%' || $1 || '%' `;
         const result = await pool.query(query, [keyword]);
-        res.json(result.rows);
+
+        const notifications = result.rows;
+
+        const enrichedNotifications = await Promise.all(
+            notifications.map(async (notification) => {
+                const { tbs_user_id } = notification;
+
+                let profileImg = null;
+                if (tbs_user_id.startsWith('tbs-op')) {
+                    const operatorResult = await pool.query(
+                        `SELECT profileimg FROM operators_tbl WHERE tbs_operator_id = $1`,
+                        [tbs_user_id]
+                    );
+                    if (operatorResult.rows.length > 0) {
+                        profileImg = operatorResult.rows[0].profileimg;
+                    }
+                } else if (tbs_user_id.startsWith('tbs-op_emp')) {
+                    const opEmpResult = await pool.query(
+                        `SELECT profile_img FROM op_emp_personal_details WHERE tbs_op_emp_id = $1`,
+                        [tbs_user_id]
+                    );
+                    if (opEmpResult.rows.length > 0) {
+                        profileImg = opEmpResult.rows[0].profile_img;
+                    }
+                } else if (tbs_user_id.startsWith('tbs-pro_emp')) {
+                    const proEmpResult = await pool.query(
+                        `SELECT profile_img FROM pro_emp_personal_details WHERE tbs_pro_emp_id = $1`,
+                        [tbs_user_id]
+                    );
+                    if (proEmpResult.rows.length > 0) {
+                        profileImg = proEmpResult.rows[0].profile_img;
+                    }
+                }
+
+                return {
+                    ...notification,
+                    profile_img: profileImg
+                };
+            })
+        );
+
+        res.status(200).json(enrichedNotifications);
     } catch (error) {
-        console.error('Error executing query', error.stack);
-        res.status(201).json({ message: 'Internal server error' });
+        console.error('Error executing query:', error.stack);
+        res.status(500).json({ message: 'Internal server error' });
     }
 }
 

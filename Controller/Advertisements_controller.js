@@ -347,6 +347,8 @@ const postAd = async (req, res) => {
 
     let employeeName = '';
     let tbs_ad_id;
+    let isActive = false
+    
 
     try {
         const clientResult = await pool.query(
@@ -371,8 +373,11 @@ const postAd = async (req, res) => {
             }
 
             const employee = employeeResult.rows[0];
-            const isActive = employee.emp_status_id === 2 && employee.emp_status.toLowerCase() === 'active';
+         
+         isActive = employee.emp_status_id === 1 && employee.emp_status.toLowerCase() === 'active';
+            console.log(employee.emp_status_id, employee.emp_status);
             employeeName = employee.emp_first_name || 'Unknown';
+            console.log(isActive);
 
             if (!isActive) {
                 return res.status(400).json({ message: 'Employee status is not active' });
@@ -416,7 +421,7 @@ const postAd = async (req, res) => {
                 [tbs_ad_id, tbs_user_id]
             );
 
-            const notificationMessage = `${employeeName} employee requested new ${ad_title} advertisement`;
+            const notificationMessage = `Posted ${ad_title} advertisement`;
             await pool.query(
                 `INSERT INTO Product_Owner_Notification (
                     tbs_pro_notif_id, tbs_user_id, user_name, user_type, subject_name,

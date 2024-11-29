@@ -7,7 +7,7 @@ const emprouter = express.Router()
 
 const emp_storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'emp_professional_documents/');
+        cb(null, 'op_employee_documents/');
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
@@ -66,11 +66,13 @@ emprouter.get('/emp-registered-address/:tbs_op_emp_id', getEmployeeById)
 emprouter.put('/emp-registered-address/:tbs_op_emp_id', updateEmployeeDetails)
     //Update ALL
 emprouter.put('/employee-All-update/:tbs_op_emp_id', emp_upload.fields([
-    { name: 'aadhar_card_doc', maxCount: 1 },
-    { name: 'pan_card_doc', maxCount: 1 },
-    { name: 'work_experience_certificate', maxCount: 1 },
-    { name: 'educational_certificate', maxCount: 1 },
-    { name: 'other_documents', maxCount: 1 }, { name: 'profile_img', maxCount: 1 }]), putEmployee)
+    { name: 'aadhar_card_front_doc', maxCount: 1 },
+    { name: 'pan_card_front_doc', maxCount: 1 },
+    { name: 'offer_letter_doc', maxCount: 1 },
+    { name: 'qualification_doc', maxCount: 1 }, 
+    { name: 'profile_img', maxCount: 1 }, 
+    { name: 'aadhar_card_back_doc', maxCount: 1 }, 
+    { name: 'pan_card_back_doc', maxCount: 1 }]), putEmployee)
 //EMPLOYEE PROFESSIONAL DETAILS
 emprouter.post('/emp-professional-details/:tbs_op_emp_id', createDetails)
 emprouter.put('/emp-professional-details/:tbs_op_emp_id', createDetails)
@@ -78,17 +80,19 @@ emprouter.get('/emp-professional-details/:tbs_op_emp_id', fetchdataById)
 emprouter.get('/emp-professional-details', fetchdata)
 //EMPLOYEE PROFESSIONAL DOCUMENTS
 emprouter.post('/emp-professional-documents/:tbs_op_emp_id', emp_upload.fields([
-    { name: 'aadhar_card_doc', maxCount: 1 },
-    { name: 'pan_card_doc', maxCount: 1 },
-    { name: 'work_experience_certificate', maxCount: 1 },
-    { name: 'educational_certificate', maxCount: 1 },
-    { name: 'other_documents', maxCount: 1 }]),AddEmpDoc)
+    { name: 'aadhar_card_front_doc', maxCount: 1 },
+    { name: 'pan_card_front_doc', maxCount: 1 },
+    { name: 'offer_letter_doc', maxCount: 1 },
+    { name: 'qualification_doc', maxCount: 1 },  
+    { name: 'aadhar_card_back_doc', maxCount: 1 }, 
+    { name: 'pan_card_back_doc', maxCount: 1 }]),AddEmpDoc)
 emprouter.put('/emp-professional-documents/:tbs_op_emp_id', emp_upload.fields([
-        { name: 'aadhar_card_doc', maxCount: 1 },
-        { name: 'pan_card_doc', maxCount: 1 },
-        { name: 'work_experience_certificate', maxCount: 1 },
-        { name: 'educational_certificate', maxCount: 1 },
-        { name: 'other_documents', maxCount: 1 }]),AddEmpDoc)
+    { name: 'aadhar_card_front_doc', maxCount: 1 },
+    { name: 'pan_card_front_doc', maxCount: 1 },
+    { name: 'offer_letter_doc', maxCount: 1 },
+    { name: 'qualification_doc', maxCount: 1 },  
+    { name: 'aadhar_card_back_doc', maxCount: 1 }, 
+    { name: 'pan_card_back_doc', maxCount: 1 }]),AddEmpDoc)
 emprouter.get('/emp-professional-documents/:tbs_op_emp_id', FetchDoc)
 emprouter.get('/emp-professional-documents', FetchAllDocs)
 emprouter.get('/emp-documents-only/:tbs_op_emp_id', FetchDoconly)

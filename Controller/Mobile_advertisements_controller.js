@@ -225,7 +225,7 @@ const postMobAd = async (req, res) => {
             }
 
             const employee = employeeResult.rows[0];
-            isActive = employee.emp_status_id === 2 && employee.emp_status.toLowerCase() === 'Active';
+            isActive = employee.emp_status_id === 1 && employee.emp_status.toLowerCase() === 'active';
             employeeName = employee.emp_first_name || 'Unknown';
         } catch (error) {
             return res.status(500).json({ message: 'Database error', error });
@@ -298,11 +298,11 @@ const postMobAd = async (req, res) => {
         // Update advertisements array for the user
         if (tbs_user_id.startsWith('tbs-pro_emp')) {
             await pool.query(
-                `UPDATE pro_emp_personal_details SET mobile_ads = array_append(mobile_ads, $1) WHERE tbs_pro_emp_id = $2`,
+                `UPDATE pro_emp_personal_details SET advertisements = array_append(advertisements, $1) WHERE tbs_pro_emp_id = $2`,
                 [tbs_mobad_id, tbs_user_id]
             );
 
-            const notificationMessage = `${employeeName} employee requested new ${mobad_title} mobile advertisement`;
+            const notificationMessage = `Posted ${mobad_title} mobile advertisement`;
             await pool.query(
                 `INSERT INTO Product_Owner_Notification (
                     tbs_pro_notif_id, tbs_user_id, user_name, user_type, subject_name,
@@ -314,19 +314,18 @@ const postMobAd = async (req, res) => {
             console.log('Notification sent:', notificationMessage);
         } else if (tbs_user_id.startsWith('tbs-pro')) {
             await pool.query(
-                `UPDATE product_owner_tbl SET mobile_ads = array_append(mobile_ads, $1) WHERE owner_id = $2`,
+                `UPDATE product_owner_tbl SET advertisements = array_append(advertisements, $1) WHERE owner_id = $2`,
                 [tbs_mobad_id, tbs_user_id]
             );
         }
 
-        res.send("Inserted Successfully!");
+        res.status(201).json({ message: "Inserted Successfully!" });
 
     } catch (error) {
         console.error('Error:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
-};
-
+}
 
 //UPDATE ADVERTISEMENT BY ID
 const putMobAds = async (req, res) => {

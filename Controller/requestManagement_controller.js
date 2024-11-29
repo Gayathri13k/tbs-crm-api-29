@@ -396,7 +396,7 @@ const getOffersDeals = async (req, res) => {
         const query = `
         SELECT *
         FROM redeem_offers
-        WHERE req_status_id IN (1, 2, 3, 5)
+        WHERE req_status_id IN (0,1, 2, 3, 4)
         `;
         const result = await pool.query(query);
 
@@ -419,7 +419,7 @@ const getOfferDealById = async (req, res) => {
         const query = `
             SELECT *
             FROM redeem_offers
-            WHERE tbs_offer_id = $1 AND req_status_id IN (1, 2, 3, 5)
+            WHERE tbs_offer_id = $1 AND req_status_id IN (0, 1, 2, 3, 4)
         `;
 
         const result = await pool.query(query, [offerId]);
@@ -443,10 +443,11 @@ const getOffersDealsByStatus = async (req, res) => {
       let query;
       let params;
   
-      if (reqStatus == 6) {
+      if (reqStatus == 5) {
         query = `
-          SELECT *
-          FROM redeem_offers;
+        SELECT *
+        FROM redeem_offers
+        WHERE req_status_id IN (0,1, 2, 3, 4)
         `;
         params = [];
       } else {
@@ -473,23 +474,33 @@ const filterOffersDealsByDate = async (req, res) => {
         let query;
         let queryParams = [];
         
-        const { from, to } = req.body;
+        const { from, to, req_status_id } = req.body;
+
+        query = `
+            SELECT *
+            FROM redeem_offers `;
         
+        const conditions = [];
+       
         if (from && to) {
-            query = `
-                SELECT *
-                FROM redeem_offers
-                WHERE created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'
-                ORDER BY created_date DESC
-            `;
-            queryParams = [from, to];
-        } else {
-            query = `
-                SELECT *
-                FROM redeem_offers
-                ORDER BY created_date DESC
-            `;
+            conditions.push(`created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'`);
+            queryParams.push(from, to);
         }
+
+        if (req_status_id !== undefined) {
+            if (req_status_id === 5) {
+                conditions.push(`req_status_id IN (0, 1, 2, 3, 4)`);
+            } else {
+                conditions.push(`req_status_id = $${queryParams.length + 1}`);
+                queryParams.push(req_status_id);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` WHERE ` + conditions.join(' AND ');
+        }
+
+        query += ` ORDER BY created_date DESC`;
 
         const result = await pool.query(query, queryParams);
         res.status(200).json(result.rows);
@@ -505,9 +516,8 @@ const searchOffersDeals = async (req, res) => {
         const { req_status_id, search_term } = req.body;
         const searchTerm = search_term ? search_term.toLowerCase() : '';
 
-        console.log('Search Term:', searchTerm);
-        console.log('Status Filter:', statusFilter);
-
+        console.log('Search Term:', searchTerm)
+        
         let query = `
             SELECT *
             FROM redeem_offers
@@ -517,8 +527,8 @@ const searchOffersDeals = async (req, res) => {
         let paramIndex = 1;
 
         if (req_status_id) {
-            if (req_status_id == 7) {
-                query += ` AND req_status_id IN (1, 2, 3, 5)`;
+            if (req_status_id == 5) {
+                query += ` AND req_status_id IN (0, 1, 2, 3, 4)`;
             } else {
                 query += ` AND req_status_id = $${paramIndex}`;
                 queryParams.push(req_status_id);
@@ -573,6 +583,253 @@ const updateOfferDealStatus = async (req, res) => {
         const offerQuery = `
             SELECT tbs_user_id, offer_name 
             FROM redeem_offers 
+            WHERE tbs_offer_id = $1
+        `;
+        const offerResult = await client.query(offerQuery, [offerId]);
+
+        if (offerResult.rows.length === 0) {
+            return res.status(201).json("Offer-Deal not found");
+        }
+
+        const tbs_user_id = offerResult.rows[0].tbs_user_id;
+        const offer_name = offerResult.rows[0].offer_name;
+
+        if (!tbs_user_id) {
+            return res.status(400).json({ message: "Invalid tbs_user_id" });
+        }
+
+        if (tbs_user_id.startsWith('tbs-pro_emp')) {
+            const user_type = 'product_owner_employee';
+
+            const empQuery = `
+                SELECT emp_first_name 
+                FROM pro_emp_personal_details 
+                WHERE tbs_pro_emp_id = $1
+            `;
+            const empResult = await client.query(empQuery, [tbs_user_id]);
+
+            if (empResult.rows.length === 0) {
+                return res.status(201).json("Product owner employee not found");
+            }
+
+            const user_name = empResult.rows[0].emp_first_name;
+
+            const notificationMessage = `Offer-Deal ${offer_name} status created by ${user_name} is now ${req_status}`;
+
+            const insertNotification = `
+                INSERT INTO pro_emp_notification (tbs_pro_emp_notif_id, tbs_user_id, user_name, user_type, subject_name, module_name, notification_message, read, tbs_pro_emp_id)
+                VALUES (CONCAT('tbs-pro-emp-notif', nextval('pro_emp_notification_seq')), $1, $2, $3, $4, $5, $6, $7, $8)
+            `;
+            const notifValues = [
+                tbs_user_id, user_name, user_type, `${offer_name}`, 'offer-deal', notificationMessage, false, tbs_user_id
+            ];
+            await client.query(insertNotification, notifValues);
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ message: "Offer-Deal status updated and notification triggered successfully" });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error updating offer-deal status', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+}
+
+//GET Controller for Offers and Deals
+const getDiscountOffersDeals = async (req, res) => {
+    try {
+        const query = `
+        SELECT *
+        FROM discount_offers
+        WHERE req_status_id IN (0, 1, 2, 3, 4)
+        `;
+        const result = await pool.query(query);
+
+        if (result.rowCount === 0) {
+            return res.status(201).json({ error: 'No offers or deals with the specified statuses found' });
+        }
+
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error executing query', err.stack);
+        res.status(500).json({ error: 'Database query failed' });
+    }
+}
+
+//GET by ID Controller for Offers and Deals
+const getDiscountOfferDealById = async (req, res) => {
+    const offerId = req.params.tbs_offer_id;
+
+    try {
+        const query = `
+            SELECT *
+            FROM discount_offers
+            WHERE tbs_offer_id = $1 AND req_status_id IN (0, 1, 2, 3, 4)
+        `;
+
+        const result = await pool.query(query, [offerId]);
+        
+        if (result.rowCount === 0) {
+            return res.status(201).json({ error: 'Offer or deal not found' });
+        }
+
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error executing query', err.stack);
+        res.status(500).json({ error: 'Server error' });
+    }
+}
+
+//GET by Status ID Controller for Offers and Deals
+const getDiscountOffersDealsByStatus = async (req, res) => {
+    const reqStatus = req.params.req_status_id;
+  
+    try {
+      let query;
+      let params;
+  
+      if (reqStatus == 5) {
+        query = `
+        SELECT *
+        FROM discount_offers
+        WHERE req_status_id IN (0, 1, 2, 3, 4)
+        `;
+        params = [];
+      } else {
+        query = `
+          SELECT *
+          FROM discount_offers
+          WHERE req_status_id = $1;
+        `;
+        params = [reqStatus];
+      }
+  
+      const result = await pool.query(query, params);
+  
+      res.status(200).json(result.rows);
+    } catch (err) {
+      console.error('Error executing query', err.stack);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+}
+
+//FILTER by Date Controller for Offers and Deals
+const filterDiscountOffersDealsByDate = async (req, res) => {
+    try {
+        let query;
+        let queryParams = [];
+        
+        const { from, to, req_status_id } = req.body;
+
+        query = `
+            SELECT *
+            FROM discount_offers `;
+        
+        const conditions = [];
+       
+        if (from && to) {
+            conditions.push(`created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'`);
+            queryParams.push(from, to);
+        }
+
+        if (req_status_id !== undefined) {
+            if (req_status_id === 5) {
+                conditions.push(`req_status_id IN (0, 1, 2, 3, 4)`);
+            } else {
+                conditions.push(`req_status_id = $${queryParams.length + 1}`);
+                queryParams.push(req_status_id);
+            }
+        }
+
+        if (conditions.length > 0) {
+            query += ` WHERE ` + conditions.join(' AND ');
+        }
+
+        query += ` ORDER BY created_date DESC`;
+
+        const result = await pool.query(query, queryParams);
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error executing query', err.stack);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+}
+
+//Search Controller for Offers and Deals
+const searchDiscountOffersDeals = async (req, res) => {
+    try {
+        const { req_status_id, search_term } = req.body;
+        const searchTerm = search_term ? search_term.toLowerCase() : '';
+
+        console.log('Search Term:', searchTerm);
+
+        let query = `
+            SELECT *
+            FROM discount_offers
+            WHERE 1=1
+        `;
+        let queryParams = [];
+        let paramIndex = 1;
+
+        if (req_status_id) {
+            if (req_status_id == 5) {
+                query += ` AND req_status_id IN (0,1, 2, 3, 4)`;
+            } else {
+                query += ` AND req_status_id = $${paramIndex}`;
+                queryParams.push(req_status_id);
+                paramIndex++;
+            }
+        }
+
+        if (searchTerm) {
+            query += ` AND (LOWER(offer_name) LIKE $${paramIndex} OR LOWER(code) LIKE $${paramIndex})`;
+            queryParams.push(`%${searchTerm}%`);
+        }
+
+        console.log('Executing query:', query);
+        console.log('With parameters:', queryParams);
+
+        const { rows } = await pool.query(query, queryParams);
+
+        if (rows.length === 0) {
+            return res.status(201).json(rows);
+        }
+
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+//PUT Controller for Updating Status
+const updateDiscountOfferDealStatus = async (req, res) => {
+    const offerId = req.params.tbs_offer_id;
+    const { req_status, req_status_id } = req.body;
+
+    if (!offerId || req_status_id === undefined || req_status === undefined) {
+        return res.status(400).json("All fields are required");
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const updateQuery = `
+            UPDATE discount_offers
+            SET 
+                req_status = COALESCE(NULLIF($1, ''), req_status),
+                req_status_id = COALESCE(NULLIF($2::integer, NULL), req_status_id)
+            WHERE tbs_offer_id = $3
+        `;
+        await client.query(updateQuery, [req_status || null, req_status_id || null, offerId]);
+
+        const offerQuery = `
+            SELECT tbs_user_id, offer_name 
+            FROM discount_offers 
             WHERE tbs_offer_id = $1
         `;
         const offerResult = await client.query(offerQuery, [offerId]);
@@ -1134,12 +1391,10 @@ const searchPromoReq = async (req, res) => {
         let query;
         let queryParams = [];
         
-        // Construct the base query
         query = `
             SELECT *
             FROM promotions_tbl
-            WHERE 1=1
-        `;
+            WHERE 1=1 `;
 
         let paramIndex = 1;
 
@@ -1149,7 +1404,6 @@ const searchPromoReq = async (req, res) => {
             paramIndex++;
         }
 
-        // Filter by search term in promo_name or operator_details
         if (search_term && typeof search_term === 'string') {
             const searchValue = `%${search_term.toLowerCase()}%`;
             query += ` AND (LOWER(promo_name) LIKE $${paramIndex} OR LOWER(operator_details) LIKE $${paramIndex})`;
@@ -1184,8 +1438,7 @@ const getClientDetails = async (req, res) => {
             LEFT JOIN 
                 client_address_details cad ON ccd.tbs_client_id = cad.tbs_client_id
             LEFT JOIN 
-                client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id
-        `;
+                client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id `;
 
         const result = await pool.query(query);
 
@@ -1216,8 +1469,7 @@ const getClientDetailsById = async (req, res) => {
                 client_address_details cad ON ccd.tbs_client_id = cad.tbs_client_id
             LEFT JOIN 
                 client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id
-            WHERE ccd.tbs_client_id = $1
-        `;
+            WHERE ccd.tbs_client_id = $1 `;
 
         const result = await pool.query(query, [clientId]);
 
@@ -1251,7 +1503,7 @@ const getClientDetailsByStatus = async (req, res) => {
                 LEFT JOIN 
                     client_address_details cad ON ccd.tbs_client_id = cad.tbs_client_id
                 LEFT JOIN 
-                    client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id ORDER BY created_date ASC;`;
+                    client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id ORDER BY created_date ASC; `;
             params = [];
         } else {
             query = `
@@ -1265,7 +1517,7 @@ const getClientDetailsByStatus = async (req, res) => {
                     client_address_details cad ON ccd.tbs_client_id = cad.tbs_client_id
                 LEFT JOIN 
                     client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id
-                WHERE ccd.req_status_id = $1 ORDER BY created_date ASC;`;
+                WHERE ccd.req_status_id = $1 ORDER BY created_date ASC; `;
             params = [reqStatus];
         }
 
@@ -1298,8 +1550,7 @@ const filterClientsByDate = async (req, res) => {
         LEFT JOIN 
             client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id
             WHERE created_date BETWEEN $1 AND $2::DATE + INTERVAL '1 day' - INTERVAL '1 second'
-            ORDER BY created_date ASC
-            `;
+            ORDER BY created_date ASC `;
             queryParams = [from, to];
         } else {
             query = `
@@ -1313,8 +1564,7 @@ const filterClientsByDate = async (req, res) => {
             client_address_details cad ON ccd.tbs_client_id = cad.tbs_client_id
         LEFT JOIN 
             client_gst_details csd ON ccd.tbs_client_id = csd.tbs_client_id
-            ORDER BY created_date ASC;
-            `;
+            ORDER BY created_date ASC; `;
         }
 
         const result = await pool.query(query, queryParams);
@@ -1399,4 +1649,4 @@ const putReq_StatusClient = async (req, res) => {
 }
 
 
-module.exports = { getRequest, getRequestID, getRequestByStatus, putReq_Status, searchReqOperators, getAllRequest, reqFilterByDate, getRequestPartner, getRequestIDPartner, getRequestByStatusPartner, reqFilterByDatePartners, searchReqPartners, putReq_StatusPartner, getOffersDeals, getOfferDealById, getOffersDealsByStatus, filterOffersDealsByDate, searchOffersDeals, updateOfferDealStatus, getAdvertisementById, getAdvertisementsByStatus, getAdvertisements, searchAdvertisements, updateAdvertisementStatus, filterAdvertisementsByDate, getMobileAdvertisementById, getMobileAdvertisements, searchMobileAdvertisements, updateMobileAdvertisementStatus, filterMobileAdvertisementsByDate, getMobileAdvertisementsByStatus, searchPromoReq, getClientDetails, getClientDetailsById, getClientDetailsByStatus, filterClientsByDate, searchClientDetails, putReq_StatusClient }
+module.exports = { getRequest, getRequestID, getRequestByStatus, putReq_Status, searchReqOperators, getAllRequest, reqFilterByDate, getRequestPartner, getRequestIDPartner, getRequestByStatusPartner, reqFilterByDatePartners, searchReqPartners, putReq_StatusPartner, getOffersDeals, getOfferDealById, getOffersDealsByStatus, filterOffersDealsByDate, searchOffersDeals, updateOfferDealStatus, getAdvertisementById, getAdvertisementsByStatus, getAdvertisements, searchAdvertisements, updateAdvertisementStatus, filterAdvertisementsByDate, getMobileAdvertisementById, getMobileAdvertisements, searchMobileAdvertisements, updateMobileAdvertisementStatus, filterMobileAdvertisementsByDate, getMobileAdvertisementsByStatus, searchPromoReq, getClientDetails, getClientDetailsById, getClientDetailsByStatus, filterClientsByDate, searchClientDetails, putReq_StatusClient, getDiscountOffersDeals, getDiscountOfferDealById, getDiscountOffersDealsByStatus, filterDiscountOffersDealsByDate, searchDiscountOffersDeals, updateDiscountOfferDealStatus }

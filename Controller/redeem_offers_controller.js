@@ -103,6 +103,28 @@ const postOffer = async (req, res) => {
                  WHERE tbs_pro_emp_id = $2`,
                 [newOfferId, tbs_user_id]
             );
+            const notificationMessage = `Posted ${offer_name} offers`;
+            await pool.query(
+                `INSERT INTO Product_Owner_Notification (
+                    tbs_pro_notif_id, 
+                    tbs_user_id, 
+                    user_name, 
+                    user_type, 
+                    subject_name, 
+                    module_name, 
+                    notification_message, 
+                    read
+                ) VALUES (
+                    CONCAT('tbs-notif', nextval('notif_id_seq')), 
+                    $1, 
+                    $2, 
+                    $3, 
+                    $4, 
+                    $5, 
+                    $6, 
+                    $7)`,
+                [tbs_user_id, employeeName, 'product_owner_employee', offer_name, 'offer', notificationMessage, false]
+            );
         } else if (tbs_user_id.startsWith('tbs-pro')) {
             await pool.query(
                 `UPDATE product_owner_tbl 
@@ -112,36 +134,12 @@ const postOffer = async (req, res) => {
             );
         }
 
-        const notificationMessage = `${employeeName} employee requested new ${offer_name} offers`;
-        await pool.query(
-            `INSERT INTO Product_Owner_Notification (
-                tbs_pro_notif_id, 
-                tbs_user_id, 
-                user_name, 
-                user_type, 
-                subject_name, 
-                module_name, 
-                notification_message, 
-                read
-            ) VALUES (
-                CONCAT('tbs-notif', nextval('notif_id_seq')), 
-                $1, 
-                $2, 
-                $3, 
-                $4, 
-                $5, 
-                $6, 
-                $7)`,
-            [tbs_user_id, employeeName, 'product_owner_employee', offer_name, 'offer', notificationMessage, false]
-        );
-
         res.status(201).json({ message: "Offer and deal created successfully", offerId: newOfferId });
     } catch (err) {
         console.error('Error:', err);
         res.status(500).json({ error: 'Internal Server Error' });
     }
-};
-
+}
 
 
 const updateOffer = async (req, res) => {

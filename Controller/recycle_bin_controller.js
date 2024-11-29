@@ -337,49 +337,80 @@ const restoreOPEmployee = async (req, res) => {
         const recycleResult = await client.query('SELECT deleted_data FROM recycle_bin WHERE tbs_recycle_id = $1', [tbs_recycle_id]);
 
         if (recycleResult.rows.length === 0) {
-            return res.status(201).send(`Recycle bin entry with ID ${tbs_recycle_id} not found`);
+            return res.status(404).send(`Recycle bin entry with ID ${tbs_recycle_id} not found`);
         }
 
         const deletedData = recycleResult.rows[0].deleted_data;
         const empPersonal = deletedData.empPersonal;
         const empProfessional = deletedData.empProfessional;
 
-        const personalInsertResult = await client.query(
-            `INSERT INTO op_emp_personal_details (tbs_op_emp_id, emp_first_name, emp_last_name, phone, email_id, alternate_phone, date_of_birth, gender, blood_group, temp_add, temp_country, 
-                temp_state, temp_city, temp_zip_code, perm_add, perm_country, perm_state, perm_city, perm_zip_code, type_name, type_id, password, emp_status, emp_status_id, 
-                profile_img, role_type, role_type_id, tbs_operator_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28) 
-             RETURNING tbs_op_emp_id`,
-            [ empPersonal.tbs_op_emp_id, 
-                empPersonal.emp_first_name, empPersonal.emp_last_name, empPersonal.phone, empPersonal.email_id, empPersonal.alternate_phone, empPersonal.date_of_birth, 
-                empPersonal.gender, empPersonal.blood_group, empPersonal.temp_add, empPersonal.temp_country, empPersonal.temp_state, empPersonal.temp_city, 
-                empPersonal.temp_zip_code, empPersonal.perm_add, empPersonal.perm_country, empPersonal.perm_state, empPersonal.perm_city, empPersonal.perm_zip_code, 
-                empPersonal.type_name, empPersonal.type_id, empPersonal.password, empPersonal.emp_status, empPersonal.emp_status_id, empPersonal.profile_img, 
-                empPersonal.role_type, empPersonal.role_type_id, empPersonal.tbs_operator_id
+        await client.query(
+            `INSERT INTO op_emp_personal_details (
+                tbs_pro_emp_id, emp_first_name, emp_last_name, phone, email_id, alternate_phone, date_of_birth, gender, blood_group, 
+                temp_add, temp_country, temp_state, temp_city, temp_zip_code, perm_add, perm_country, perm_state, perm_city, 
+                perm_zip_code, type_name, type_id, password, emp_status, emp_status_id, profile_img, tbs_operator_id
+            ) 
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, 
+                $10, $11, $12, $13, $14, $15, $16, $17, $18, 
+                $19, $20, $21, $22, $23, $24, $25, $26
+            )`,
+            [
+                empPersonal.tbs_op_emp_id, empPersonal.emp_first_name, empPersonal.emp_last_name, empPersonal.phone, empPersonal.email_id, 
+                empPersonal.alternate_phone, empPersonal.date_of_birth, empPersonal.gender, empPersonal.blood_group, empPersonal.temp_add, 
+                empPersonal.temp_country, empPersonal.temp_state, empPersonal.temp_city, empPersonal.temp_zip_code, empPersonal.perm_add, 
+                empPersonal.perm_country, empPersonal.perm_state, empPersonal.perm_city, empPersonal.perm_zip_code, empPersonal.type_name, 
+                empPersonal.type_id, empPersonal.password, empPersonal.emp_status, empPersonal.emp_status_id, empPersonal.profile_img, 
+                empPersonal.tbs_operator_id
             ]
         );
 
-        const newTbsOpEmpId = personalInsertResult.rows[0].tbs_op_emp_id; 
+        const formattedJoiningDate = empProfessional.joining_date 
+            ? new Date(empProfessional.joining_date).toISOString().split('T')[0] 
+            : null;
 
         await client.query(
-            `UPDATE op_emp_professional_details 
-             SET joining_date = $1, designation = $2, branch = $3, official_email_id = $4, years_of_experience = $5, department = $6, reporting_manager = $7, 
-                 aadhar_card_number = $8, aadhar_card_doc = $9, pan_card_number = $10, pan_card_doc = $11, work_experience_certificate = $12, 
-                 educational_certificate = $13, other_documents = $14, role_type = $15, aadhar_card_file = $16, pancard_file = $17, 
-                 work_experience_file = $18, education_certificate_file = $19, other_certificate_file = $20 
-             WHERE tbs_op_emp_id = $21`,
+            `UPDATE op_emp_professional_details
+            SET 
+                joining_date = COALESCE(TO_DATE($1, 'YYYY-MM-DD'), joining_date),
+                role_type = COALESCE($2, role_type),
+                designation = COALESCE($3, designation),
+                branch = COALESCE($4, branch),
+                language = COALESCE($5, language),
+                qualification = COALESCE($6, qualification),
+                department = COALESCE($7, department),
+                reporting_manager = COALESCE($8, reporting_manager),
+                role_type_id = COALESCE($9, role_type_id),
+                aadhar_card_number = COALESCE($10, aadhar_card_number),
+                aadhar_card_front_doc = COALESCE($11, aadhar_card_front_doc),
+                pan_card_number = COALESCE($12, pan_card_number),
+                pan_card_front_doc = COALESCE($13, pan_card_front_doc),
+                offer_letter_doc = COALESCE($14, offer_letter_doc),
+                qualification_doc = COALESCE($15, qualification_doc),
+                aadhar_card_front_file = COALESCE($16, aadhar_card_front_file),
+                pancard_front_file = COALESCE($17, pancard_front_file),
+                qualification_doc_file = COALESCE($18, qualification_doc_file),
+                offer_letter_doc_file = COALESCE($19, offer_letter_doc_file),
+                aadhar_card_back_doc = COALESCE($20, aadhar_card_back_doc),
+                pan_card_back_doc = COALESCE($21, pan_card_back_doc),
+                aadhar_card_back_file = COALESCE($22, aadhar_card_back_file),
+                pancard_back_file = COALESCE($23, pancard_back_file)
+            WHERE 
+                tbs_op_emp_id = $24`,
             [
-                empProfessional.joining_date, empProfessional.designation, empProfessional.branch, empProfessional.official_email_id, empProfessional.years_of_experience, 
-                empProfessional.department, empProfessional.reporting_manager, empProfessional.aadhar_card_number, empProfessional.aadhar_card_doc, empProfessional.pan_card_number, 
-                empProfessional.pan_card_doc, empProfessional.work_experience_certificate, empProfessional.educational_certificate, empProfessional.other_documents, 
-                empProfessional.role_type, empProfessional.aadhar_card_file, empProfessional.pancard_file, empProfessional.work_experience_file, empProfessional.education_certificate_file, 
-                empProfessional.other_certificate_file, newTbsOpEmpId 
+                formattedJoiningDate, empProfessional.role_type, empProfessional.designation, empProfessional.branch, empProfessional.language, 
+                empProfessional.qualification, empProfessional.department, empProfessional.reporting_manager, empProfessional.role_type_id, 
+                empProfessional.aadhar_card_number, empProfessional.aadhar_card_front_doc, empProfessional.pan_card_number, 
+                empProfessional.pan_card_front_doc, empProfessional.offer_letter_doc, empProfessional.qualification_doc, 
+                empProfessional.aadhar_card_front_file, empProfessional.pancard_front_file, empProfessional.qualification_doc_file, 
+                empProfessional.offer_letter_doc_file, empProfessional.aadhar_card_back_doc, empProfessional.pan_card_back_doc, 
+                empProfessional.aadhar_card_back_file, empProfessional.pancard_back_file, empProfessional.tbs_op_emp_id
             ]
-        )
+        );
 
         await client.query('DELETE FROM recycle_bin WHERE tbs_recycle_id = $1', [tbs_recycle_id]);
 
-        res.status(200).send(`Employee restored successfully with ID: ${newTbsOpEmpId}`);
+        res.status(200).send(`Employee restored successfully with ID: ${empPersonal.tbs_pro_emp_id}`);
     } catch (error) {
         console.error('Error restoring employee:', error);
         res.status(500).send('Error restoring employee');
@@ -418,7 +449,7 @@ const restoreProEmployee = async (req, res) => {
         const recycleResult = await client.query('SELECT deleted_data FROM recycle_bin WHERE tbs_recycle_id = $1', [tbs_recycle_id]);
 
         if (recycleResult.rows.length === 0) {
-            return res.status(201).send(`Recycle bin entry with ID ${tbs_recycle_id} not found`);
+            return res.status(404).send(`Recycle bin entry with ID ${tbs_recycle_id} not found`);
         }
 
         const deletedData = recycleResult.rows[0].deleted_data;
@@ -426,32 +457,66 @@ const restoreProEmployee = async (req, res) => {
         const empProfessional = deletedData.empProfessional;
 
         await client.query(
-            `INSERT INTO pro_emp_personal_details (tbs_pro_emp_id, emp_first_name, emp_last_name, phone, email_id, alternate_phone, date_of_birth, gender, blood_group, temp_add, temp_country, 
-                temp_state, temp_city, temp_zip_code, perm_add, perm_country, perm_state, perm_city, perm_zip_code, type_name, type_id, password, emp_status, emp_status_id, 
-                profile_img, tbs_pro_emp_id, role_type, role_type_id, owner_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
-            [  empPersonal.tbs_pro_emp_id, 
-                empPersonal.emp_first_name, empPersonal.emp_last_name, empPersonal.phone, empPersonal.email_id, empPersonal.alternate_phone, empPersonal.date_of_birth,
-                empPersonal.gender, empPersonal.blood_group, empPersonal.temp_add, empPersonal.temp_country, empPersonal.temp_state, empPersonal.temp_city,
-                empPersonal.temp_zip_code, empPersonal.perm_add, empPersonal.perm_country, empPersonal.perm_state, empPersonal.perm_city, empPersonal.perm_zip_code,
-                empPersonal.type_name, empPersonal.type_id, empPersonal.password, empPersonal.emp_status, empPersonal.emp_status_id, empPersonal.profile_img,
-                empPersonal.tbs_pro_emp_id, empPersonal.role_type, empPersonal.role_type_id, empPersonal.owner_id
+            `INSERT INTO pro_emp_personal_details (
+                tbs_pro_emp_id, emp_first_name, emp_last_name, phone, email_id, alternate_phone, date_of_birth, gender, blood_group, 
+                temp_add, temp_country, temp_state, temp_city, temp_zip_code, perm_add, perm_country, perm_state, perm_city, 
+                perm_zip_code, type_name, type_id, password, emp_status, emp_status_id, profile_img, owner_id
+            ) 
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, 
+                $10, $11, $12, $13, $14, $15, $16, $17, $18, 
+                $19, $20, $21, $22, $23, $24, $25, $26
+            )`,
+            [
+                empPersonal.tbs_pro_emp_id, empPersonal.emp_first_name, empPersonal.emp_last_name, empPersonal.phone, empPersonal.email_id, 
+                empPersonal.alternate_phone, empPersonal.date_of_birth, empPersonal.gender, empPersonal.blood_group, empPersonal.temp_add, 
+                empPersonal.temp_country, empPersonal.temp_state, empPersonal.temp_city, empPersonal.temp_zip_code, empPersonal.perm_add, 
+                empPersonal.perm_country, empPersonal.perm_state, empPersonal.perm_city, empPersonal.perm_zip_code, empPersonal.type_name, 
+                empPersonal.type_id, empPersonal.password, empPersonal.emp_status, empPersonal.emp_status_id, empPersonal.profile_img, 
+                empPersonal.owner_id
             ]
         );
 
+        const formattedJoiningDate = empProfessional.joining_date 
+            ? new Date(empProfessional.joining_date).toISOString().split('T')[0] 
+            : null;
+
         await client.query(
-            `UPDATE pro_emp_professional_details SET joining_date = $1, designation = $2, branch = $3, official_email_id = $4, years_of_experience = $5, 
-                department = $6, reporting_manager = $7, aadhar_card_number = $8, aadhar_card_doc = $9, pan_card_number = $10, pan_card_doc = $11, 
-                work_experience_certificate = $12, educational_certificate = $13, other_documents = $14, role_type = $15, 
-                aadhar_card_file = $16, pancard_file = $17, work_experience_file = $18, education_certificate_file = $19, other_certificate_file = $20 
-             WHERE tbs_pro_emp_id = $21`,
+            `UPDATE pro_emp_professional_details
+            SET 
+                joining_date = COALESCE(TO_DATE($1, 'YYYY-MM-DD'), joining_date),
+                role_type = COALESCE($2, role_type),
+                designation = COALESCE($3, designation),
+                branch = COALESCE($4, branch),
+                language = COALESCE($5, language),
+                qualification = COALESCE($6, qualification),
+                department = COALESCE($7, department),
+                reporting_manager = COALESCE($8, reporting_manager),
+                role_type_id = COALESCE($9, role_type_id),
+                aadhar_card_number = COALESCE($10, aadhar_card_number),
+                aadhar_card_front_doc = COALESCE($11, aadhar_card_front_doc),
+                pan_card_number = COALESCE($12, pan_card_number),
+                pan_card_front_doc = COALESCE($13, pan_card_front_doc),
+                offer_letter_doc = COALESCE($14, offer_letter_doc),
+                qualification_doc = COALESCE($15, qualification_doc),
+                aadhar_card_front_file = COALESCE($16, aadhar_card_front_file),
+                pancard_front_file = COALESCE($17, pancard_front_file),
+                qualification_doc_file = COALESCE($18, qualification_doc_file),
+                offer_letter_doc_file = COALESCE($19, offer_letter_doc_file),
+                aadhar_card_back_doc = COALESCE($20, aadhar_card_back_doc),
+                pan_card_back_doc = COALESCE($21, pan_card_back_doc),
+                aadhar_card_back_file = COALESCE($22, aadhar_card_back_file),
+                pancard_back_file = COALESCE($23, pancard_back_file)
+            WHERE 
+                tbs_pro_emp_id = $24`,
             [
-                empProfessional.joining_date, empProfessional.designation, empProfessional.branch, empProfessional.official_email_id, empProfessional.years_of_experience,
-                empProfessional.department, empProfessional.reporting_manager, empProfessional.aadhar_card_number, empProfessional.aadhar_card_doc,
-                empProfessional.pan_card_number, empProfessional.pan_card_doc, empProfessional.work_experience_certificate, empProfessional.educational_certificate,
-                empProfessional.other_documents, empProfessional.role_type, empProfessional.aadhar_card_file, empProfessional.pancard_file,
-                empProfessional.work_experience_file, empProfessional.education_certificate_file, empProfessional.other_certificate_file,
-                empProfessional.tbs_pro_emp_id
+                formattedJoiningDate, empProfessional.role_type, empProfessional.designation, empProfessional.branch, empProfessional.language, 
+                empProfessional.qualification, empProfessional.department, empProfessional.reporting_manager, empProfessional.role_type_id, 
+                empProfessional.aadhar_card_number, empProfessional.aadhar_card_front_doc, empProfessional.pan_card_number, 
+                empProfessional.pan_card_front_doc, empProfessional.offer_letter_doc, empProfessional.qualification_doc, 
+                empProfessional.aadhar_card_front_file, empProfessional.pancard_front_file, empProfessional.qualification_doc_file, 
+                empProfessional.offer_letter_doc_file, empProfessional.aadhar_card_back_doc, empProfessional.pan_card_back_doc, 
+                empProfessional.aadhar_card_back_file, empProfessional.pancard_back_file, empProfessional.tbs_pro_emp_id
             ]
         );
 

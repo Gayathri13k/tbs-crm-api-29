@@ -5,7 +5,11 @@ const xlsx = require('xlsx')
 
 // OFFERS-DEALS POST CONTROLLER
 const postOffer = async (req, res) => {
-    const { tbs_user_id, offer_name, code, start_date, expiry_date, usage, status, status_id, offer_desc, occupation, req_status, req_status_id, occupation_id, offer_value } = req.body;
+    const {
+        tbs_user_id, offer_name, code, start_date, expiry_date, usage, status, 
+        status_id, offer_desc, occupation, req_status, req_status_id, 
+        occupation_id, offer_value
+    } = req.body;
 
     const offerPicUrl = req.files && req.files['offer_img'] ? `/offer_files/${req.files['offer_img'][0].filename}` : null;
     const themeUrl = req.files && req.files['theme'] ? `/offer_files/${req.files['theme'][0].filename}` : null;
@@ -23,7 +27,7 @@ const postOffer = async (req, res) => {
 
     try {
         if (!tbs_user_id || !offer_name || !code || !start_date || !expiry_date || !usage || !status || !status_id || !offer_desc || !occupation || !req_status || !req_status_id || !occupation_id) {
-            return res.status(400).json({ message: 'Missing required fields' })
+            return res.status(400).json({ message: 'Missing required fields' });
         }
 
         if (req.files?.['offer_img']) {
@@ -88,10 +92,15 @@ const postOffer = async (req, res) => {
                 occupation, 
                 req_status, 
                 req_status_id, 
-                occupation_id, offer_value
+                occupation_id, 
+                offer_value
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) 
             RETURNING tbs_offer_id`,
-            [tbs_user_id, offer_name, code, start_date, expiry_date, usage, status, status_id, offer_desc, offerPicUrl, image_file?.size, image_file?.type, image_file, themeUrl, occupation, req_status, req_status_id, occupation_id, offer_value]
+            [
+                tbs_user_id, offer_name, code, start_date, expiry_date, usage, status, status_id, offer_desc, 
+                offerPicUrl, image_file?.size, image_file?.type, image_file, themeUrl, occupation, req_status, 
+                req_status_id, occupation_id, offer_value
+            ]
         );
 
         const newOfferId = result.rows[0].tbs_offer_id;
@@ -103,6 +112,32 @@ const postOffer = async (req, res) => {
                  WHERE tbs_pro_emp_id = $2`,
                 [newOfferId, tbs_user_id]
             );
+
+            const notificationMessage = `Posted ${offer_name} offers`;
+            await pool.query(
+                `INSERT INTO Product_Owner_Notification (
+                    tbs_pro_notif_id, 
+                    tbs_user_id, 
+                    user_name, 
+                    user_type, 
+                    subject_name, 
+                    module_name, 
+                    notification_message, 
+                    read
+                ) VALUES (
+                    CONCAT('tbs-notif', nextval('notif_id_seq')), 
+                    $1, 
+                    $2, 
+                    $3, 
+                    $4, 
+                    $5, 
+                    $6, 
+                    $7)`,
+                [
+                    tbs_user_id, employeeName, 'product_owner_employee', offer_name, 'offer', 
+                    notificationMessage, false
+                ]
+            );
         } else if (tbs_user_id.startsWith('tbs-pro')) {
             await pool.query(
                 `UPDATE product_owner_tbl 
@@ -112,35 +147,13 @@ const postOffer = async (req, res) => {
             );
         }
 
-        const notificationMessage = `${employeeName} employee requested new ${offer_name} offers`;
-        await pool.query(
-            `INSERT INTO Product_Owner_Notification (
-                tbs_pro_notif_id, 
-                tbs_user_id, 
-                user_name, 
-                user_type, 
-                subject_name, 
-                module_name, 
-                notification_message, 
-                read
-            ) VALUES (
-                CONCAT('tbs-notif', nextval('notif_id_seq')), 
-                $1, 
-                $2, 
-                $3, 
-                $4, 
-                $5, 
-                $6, 
-                $7)`,
-            [tbs_user_id, employeeName, 'product_owner_employee', offer_name, 'offer', notificationMessage, false]
-        );
-
         res.status(201).json({ message: "Offer and deal created successfully", offerId: newOfferId });
     } catch (err) {
         console.error('Error:', err);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
 
 const updateOffer = async (req, res) => {
     const tbs_offer_id = req.params.tbs_offer_id;

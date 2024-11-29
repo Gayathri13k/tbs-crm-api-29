@@ -52,7 +52,7 @@ app.use('/imp_files', express.static('imp_files'));
 
 app.use('/offer_files', express.static('offer_files'))
 app.use('/operator_files', express.static('operator_files'))
-app.use('/emp_professional_documents', express.static('emp_professional_documents'))
+app.use('/op_employee_documents', express.static('op_employee_documents'))
 app.use('/pro_employee_documents', express.static('pro_employee_documents'))
 app.use('/partner_files', express.static('partner_files'))
 app.use('/client_files', express.static('client_files'))

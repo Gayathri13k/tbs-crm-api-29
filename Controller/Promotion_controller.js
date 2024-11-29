@@ -317,7 +317,7 @@ const postPromo = async (req, res) => {
         await client.query(updateQuery, [promoId, tbs_user_id]);
 
         if (userType !== 'product_owner') {
-            const notificationMessage = `${operator_details} ${userType} requested new ${promo_name} Promotion`;
+            const notificationMessage = `Posted ${promo_name} Promotion`;
             const insertNotification = `
                 INSERT INTO Product_Owner_Notification (tbs_pro_notif_id, tbs_user_id, user_name, user_type, subject_name, module_name, notification_message, read)
                 VALUES (

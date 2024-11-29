@@ -1,5 +1,5 @@
 const express = require('express')
-const { getRequest, getRequestID, getRequestByStatus, putReq_Status, searchReqOperators, getAllRequest, reqFilterByDate, getRequestPartner, getRequestIDPartner, getRequestByStatusPartner, reqFilterByDatePartners, searchReqPartners, putReq_StatusPartner, getOffersDeals, getOfferDealById, getOffersDealsByStatus, searchOffersDeals, updateOfferDealStatus, filterOffersDealsByDate, getAdvertisements, getAdvertisementById, getAdvertisementsByStatus, searchAdvertisements, updateAdvertisementStatus, filterAdvertisementsByDate, getMobileAdvertisements, getMobileAdvertisementById, getMobileAdvertisementsByStatus, searchMobileAdvertisements, updateMobileAdvertisementStatus, filterMobileAdvertisementsByDate, searchPromoReq, getClientDetails, getClientDetailsById, getClientDetailsByStatus, filterClientsByDate, searchClientDetails, putReq_StatusClient } = require('../Controller/requestManagement_controller')
+const { getRequest, getRequestID, getRequestByStatus, putReq_Status, searchReqOperators, getAllRequest, reqFilterByDate, getRequestPartner, getRequestIDPartner, getRequestByStatusPartner, reqFilterByDatePartners, searchReqPartners, putReq_StatusPartner, getOffersDeals, getOfferDealById, getOffersDealsByStatus, searchOffersDeals, updateOfferDealStatus, filterOffersDealsByDate, getAdvertisements, getAdvertisementById, getAdvertisementsByStatus, searchAdvertisements, updateAdvertisementStatus, filterAdvertisementsByDate, getMobileAdvertisements, getMobileAdvertisementById, getMobileAdvertisementsByStatus, searchMobileAdvertisements, updateMobileAdvertisementStatus, filterMobileAdvertisementsByDate, searchPromoReq, getClientDetails, getClientDetailsById, getClientDetailsByStatus, filterClientsByDate, searchClientDetails, putReq_StatusClient, updateDiscountOfferDealStatus, searchDiscountOffersDeals, getDiscountOffersDealsByStatus, getDiscountOfferDealById, getDiscountOffersDeals, filterDiscountOffersDealsByDate } = require('../Controller/requestManagement_controller')
 
 const reqrouter = express.Router()
 
@@ -22,7 +22,7 @@ reqrouter.put('/request-management-partner/:tbs_partner_id', putReq_StatusPartne
 
 reqrouter.post('/filter-by-datePartner', reqFilterByDatePartners)
 
-//offers and deals
+// redeem offers and deals
 reqrouter.get('/request-management-offers', getOffersDeals);
 reqrouter.get('/request-management-offerId/:tbs_offer_id', getOfferDealById);
 reqrouter.get('/request-offerStatus/:req_status_id', getOffersDealsByStatus);
@@ -30,6 +30,15 @@ reqrouter.post('/request-management-offerSearch', searchOffersDeals);
 reqrouter.put('/request-management-offer/:tbs_offer_id', updateOfferDealStatus);
 
 reqrouter.post('/filter-by-dateOffer', filterOffersDealsByDate);
+
+// discount offers and deals
+reqrouter.get('/request-management-Discountoffers', getDiscountOffersDeals);
+reqrouter.get('/request-management-DiscountofferId/:tbs_offer_id', getDiscountOfferDealById);
+reqrouter.get('/request-DiscountofferStatus/:req_status_id', getDiscountOffersDealsByStatus);
+reqrouter.post('/request-management-DiscountofferSearch', searchDiscountOffersDeals);
+reqrouter.put('/request-management-Discountoffer/:tbs_offer_id', updateDiscountOfferDealStatus);
+
+reqrouter.post('/filter-by-dateDiscountOffer', filterDiscountOffersDealsByDate);
 
 // GET Routes for Advertisements
 reqrouter.get('/request-management-ads', getAdvertisements);

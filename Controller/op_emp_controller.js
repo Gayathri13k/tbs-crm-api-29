@@ -7,13 +7,13 @@ const moment = require('moment')
 const createEMP = async (req, res, next) => {
     const { emp_first_name, emp_last_name, phone, email_id, alternate_phone, date_of_birth, gender, blood_group, tbs_operator_id } = req.body;
 
-    const profile_img = req.file ? `/emp_professional_documents/${req.file.filename}` : null;
+    const profile_img = req.file ? `/op_employee_documents/${req.file.filename}` : null;
   
     if (!emp_first_name || !emp_last_name || !phone || !email_id || !alternate_phone || !date_of_birth || !gender || !blood_group || !tbs_operator_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
   
-    const type_name = 'EMPLOYEE', type_id = 'OPEMP101', emp_status = 'active', emp_status_id = 1;
+    const type_name = 'EMPLOYEE', type_id = 'OPEMP101', emp_status = 'Draft', emp_status_id = 0;
   
     try {
       const operatorCheck = await pool.query(
@@ -58,7 +58,7 @@ const createEMP = async (req, res, next) => {
     const id = req.params.tbs_op_emp_id;
     const { emp_first_name, emp_last_name, phone, email_id, alternate_phone, date_of_birth, gender, blood_group } = req.body
 
-    const profile_img = req.file ? `/emp_professional_documents/${req.file.filename}` : null;
+    const profile_img = req.file ? `/op_employee_documents/${req.file.filename}` : null;
 
     if (!emp_first_name || !emp_last_name || !phone || !email_id || !alternate_phone || !date_of_birth || !gender || !blood_group) {
         return res.status(400).json({ error: 'Missing required fields' });
@@ -98,7 +98,7 @@ const createEMP = async (req, res, next) => {
 //UPDATE PROFILE-IMG
 const updateProfile = async (req, res) => {
     const id = req.params.tbs_op_emp_id;
-    const profile_img = req.file ? `/emp_professional_documents/${req.file.filename}` : null;
+    const profile_img = req.file ? `/op_employee_documents/${req.file.filename}` : null;
     console.log('profile_img:', profile_img);
 
     if (!profile_img === null) {
@@ -288,8 +288,8 @@ try {
 const updateEmployeeDetails = async (req, res) => {
     const employeeId = req.params.tbs_op_emp_id 
     const {
-        temp_add, temp_country, temp_state, temp_city, temp_zip_code,
-        perm_add, perm_country, perm_state, perm_city, perm_zip_code
+        temp_add, temp_country, temp_state, temp_city, temp_region, temp_zip_code,
+        perm_add, perm_country, perm_state, perm_city, perm_region, perm_zip_code
     } = req.body
 
     try {
@@ -305,14 +305,15 @@ const updateEmployeeDetails = async (req, res) => {
                 perm_country = $7,
                 perm_state = $8,
                 perm_city = $9,
-                perm_zip_code = $10
+                perm_zip_code = $10,
+                temp_region = $11, perm_region = $12
             WHERE 
-                tbs_op_emp_id = $11
+                tbs_op_emp_id = $13
         `
 
         await pool.query(query, [
             temp_add, temp_country, temp_state, temp_city, temp_zip_code,
-            perm_add, perm_country, perm_state, perm_city, perm_zip_code,
+            perm_add, perm_country, perm_state, perm_city, perm_zip_code, temp_region, perm_region,
             employeeId
         ])
 
@@ -448,91 +449,172 @@ const fetchdataById = async (req, res) => {
 
 //employee-professional-documents POST CONTROLLER
 const AddEmpDoc = async (req, res) => {
-  const { tbs_op_emp_id } = req.params
-  const { aadhar_card_number, pan_card_number } = req.body
-
-  if( !aadhar_card_number || !pan_card_number ){
-    return res.status(400).json({ error: 'Missing required fields' })
-  }
-
-  const aadhar_card_file = req.files && req.files['aadhar_card_doc'] ? {
-    type: req.files['aadhar_card_doc'][0].mimetype,
-    filename: req.files['aadhar_card_doc'][0].filename,
-    path: req.files['aadhar_card_doc'][0].path,
-    size: req.files['aadhar_card_doc'][0].size,
-    created_date: new Date().toISOString()
-} : null
-
-const pancard_file = req.files && req.files['pan_card_doc'] ? {
-    type: req.files['pan_card_doc'][0].mimetype,
-    filename: req.files['pan_card_doc'][0].filename,
-    path: req.files['pan_card_doc'][0].path,
-    size: req.files['pan_card_doc'][0].size,
-    created_date: new Date().toISOString()
-} : null
-
-const qualification_doc_file =req.files && req.files['qualification_doc'] ? {
-    type: req.files['qualification_doc'][0].mimetype,
-    filename: req.files['qualification_doc'][0].filename,
-    path: req.files['qualification_doc'][0].path,
-    size: req.files['qualification_doc'][0].size,
-    created_date: new Date().toISOString()
-} : null
-
-const offer_letter_doc_file =req.files && req.files['offer_letter_doc'] ? {
-    type: req.files['offer_letter_doc'][0].mimetype,
-    filename: req.files['offer_letter_doc'][0].filename,
-    path: req.files['offer_letter_doc'][0].path,
-    size: req.files['offer_letter_doc'][0].size,
-    created_date: new Date().toISOString()
-} : null
+    const { tbs_op_emp_id } = req.params;
+    const { aadhar_card_number, pan_card_number } = req.body;
   
-  const aadhar_card_doc = req.files && req.files['aadhar_card_doc'] ? `/emp_professional_documents/${req.files['aadhar_card_doc'][0].filename}` : null
-  const pan_card_doc = req.files && req.files['pan_card_doc'] ? `/emp_professional_documents/${req.files['pan_card_doc'][0].filename}` : null
-  const qualification_doc = req.files && req.files['qualification_doc'] ? `/emp_professional_documents/${req.files['qualification_doc'][0].filename}` : null
-  const offer_letter_doc = req.files && req.files['offer_letter_doc'] ? `/emp_professional_documents/${req.files['offer_letter_doc'][0].filename}` : null
-
-  const query = `
+    if (!aadhar_card_number || !pan_card_number) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+  
+    const aadhar_card_front_file = req.files && req.files['aadhar_card_front_doc'] ? {
+      type: req.files['aadhar_card_front_doc'][0].mimetype,
+      filename: req.files['aadhar_card_front_doc'][0].filename,
+      path: req.files['aadhar_card_front_doc'][0].path,
+      size: req.files['aadhar_card_front_doc'][0].size,
+      created_date: new Date().toISOString()
+    } : null;
+  
+    const pancard_front_file = req.files && req.files['pan_card_front_doc'] ? {
+      type: req.files['pan_card_front_doc'][0].mimetype,
+      filename: req.files['pan_card_front_doc'][0].filename,
+      path: req.files['pan_card_front_doc'][0].path,
+      size: req.files['pan_card_front_doc'][0].size,
+      created_date: new Date().toISOString()
+    } : null;
+  
+    const aadhar_card_back_file = req.files && req.files['aadhar_card_back_doc'] ? {
+      type: req.files['aadhar_card_back_doc'][0].mimetype,
+      filename: req.files['aadhar_card_back_doc'][0].filename,
+      path: req.files['aadhar_card_back_doc'][0].path,
+      size: req.files['aadhar_card_back_doc'][0].size,
+      created_date: new Date().toISOString()
+    } : null;
+  
+    const pancard_back_file = req.files && req.files['pan_card_back_doc'] ? {
+      type: req.files['pan_card_back_doc'][0].mimetype,
+      filename: req.files['pan_card_back_doc'][0].filename,
+      path: req.files['pan_card_back_doc'][0].path,
+      size: req.files['pan_card_back_doc'][0].size,
+      created_date: new Date().toISOString()
+    } : null;
+  
+    const qualification_doc_file = req.files && req.files['qualification_doc'] ? {
+      type: req.files['qualification_doc'][0].mimetype,
+      filename: req.files['qualification_doc'][0].filename,
+      path: req.files['qualification_doc'][0].path,
+      size: req.files['qualification_doc'][0].size,
+      created_date: new Date().toISOString()
+    } : null;
+  
+    const offer_letter_doc_file = req.files && req.files['offer_letter_doc'] ? {
+      type: req.files['offer_letter_doc'][0].mimetype,
+      filename: req.files['offer_letter_doc'][0].filename,
+      path: req.files['offer_letter_doc'][0].path,
+      size: req.files['offer_letter_doc'][0].size,
+      created_date: new Date().toISOString()
+    } : null;
+  
+    const aadhar_card_front_doc = req.files && req.files['aadhar_card_front_doc'] ? `/op_employee_documents/${req.files['aadhar_card_front_doc'][0].filename}` : null;
+    const pan_card_front_doc = req.files && req.files['pan_card_front_doc'] ? `/op_employee_documents/${req.files['pan_card_front_doc'][0].filename}` : null;
+    const aadhar_card_back_doc = req.files && req.files['aadhar_card_back_doc'] ? `/op_employee_documents/${req.files['aadhar_card_back_doc'][0].filename}` : null;
+    const pan_card_back_doc = req.files && req.files['pan_card_back_doc'] ? `/op_employee_documents/${req.files['pan_card_back_doc'][0].filename}` : null;
+    const qualification_doc = req.files && req.files['qualification_doc'] ? `/op_employee_documents/${req.files['qualification_doc'][0].filename}` : null;
+    const offer_letter_doc = req.files && req.files['offer_letter_doc'] ? `/op_employee_documents/${req.files['offer_letter_doc'][0].filename}` : null;
+  
+    const query = `
     UPDATE op_emp_professional_details
-      SET 
-          aadhar_card_number = $1, aadhar_card_doc = $2, pan_card_number = $3,
-          pan_card_doc = $4, offer_letter_doc = $5, qualification_doc = $6,
-          aadhar_card_file = $7, pancard_file = $8, qualification_doc_file = $9, offer_letter_doc_file = $10, updated_date = now()
-      WHERE tbs_op_emp_id = $11
-      RETURNING *
-  `
-
-  try {
-      const result = await pool.query(query, [aadhar_card_number, aadhar_card_doc,
-          pan_card_number, pan_card_doc, offer_letter_doc,
-          qualification_doc, aadhar_card_file, pancard_file, qualification_doc_file, offer_letter_doc_file, tbs_op_emp_id
-      ])
+    SET 
+        aadhar_card_number = COALESCE($1, aadhar_card_number),
+        aadhar_card_front_doc = COALESCE($2, aadhar_card_front_doc),
+        pan_card_number = COALESCE($3, pan_card_number),
+        pan_card_front_doc = COALESCE($4, pan_card_front_doc),
+        offer_letter_doc = COALESCE($5, offer_letter_doc),
+        qualification_doc = COALESCE($6, qualification_doc),
+        aadhar_card_front_file = COALESCE($7, aadhar_card_front_file),
+        pancard_front_file = COALESCE($8, pancard_front_file),
+        qualification_doc_file = COALESCE($9, qualification_doc_file),
+        offer_letter_doc_file = COALESCE($10, offer_letter_doc_file),
+        updated_date = now(),
+        aadhar_card_back_doc = COALESCE($11, aadhar_card_back_doc),
+        pan_card_back_doc = COALESCE($12, pan_card_back_doc),
+        aadhar_card_back_file = COALESCE($13, aadhar_card_back_file),
+        pancard_back_file = COALESCE($14, pancard_back_file)
+    WHERE tbs_op_emp_id = $15
+    RETURNING *  
+    `;
+  
+    try {
+      const result = await pool.query(query, [
+        aadhar_card_number, aadhar_card_front_doc,
+        pan_card_number, pan_card_front_doc, offer_letter_doc,
+        qualification_doc, aadhar_card_front_file, pancard_front_file,
+        qualification_doc_file, offer_letter_doc_file, aadhar_card_back_doc,
+        pan_card_back_doc, aadhar_card_back_file, pancard_back_file, tbs_op_emp_id
+      ]);
+  
       if (result.rows.length === 0) {
-          return res.status(201).json({ error: 'Employee not found' })
+        return res.status(201).json({ error: 'Employee not found' });
       }
-      res.status(200).json(`Employee professional documents are uploaded successfully`)
-  } catch (error) {
-      console.error('Error:', error)
-      res.status(200).json({ error: 'Internal server error' })
-  }
-}
+  
+      const checkQuery = `
+      SELECT 
+      CASE 
+          WHEN EXISTS (
+              SELECT 1
+              FROM op_emp_personal_details pd
+              LEFT JOIN op_emp_professional_details prd ON pd.tbs_op_emp_id = prd.tbs_op_emp_id
+              WHERE pd.tbs_op_emp_id = $1
+                AND (
+                  pd.emp_first_name IS NULL OR 
+                  pd.emp_last_name IS NULL OR 
+                  pd.phone IS NULL OR 
+                  pd.email_id IS NULL OR 
+                  pd.date_of_birth IS NULL OR 
+                  pd.gender IS NULL OR 
+                  pd.temp_add IS NULL OR 
+                  pd.perm_add IS NULL OR 
+                  prd.joining_date IS NULL OR 
+                  prd.designation IS NULL OR 
+                  prd.branch IS NULL OR 
+                  prd.aadhar_card_number IS NULL OR 
+                  prd.pan_card_number IS NULL OR 
+                  prd.qualification_doc IS NULL OR 
+                  prd.offer_letter_doc IS NULL
+                )
+          ) THEN TRUE
+          ELSE FALSE
+      END AS has_null_columns;  `;
+  
+      const checkResult = await pool.query(checkQuery, [tbs_op_emp_id]);
+  
+      if (checkResult.rows[0].has_null_columns) {
+        console.log("Some columns are NULL. Status cannot be updated.");
+        return { success: false, message: "Some columns are NULL. Status not updated." };
+      }
+  
+      const updateEmpStatusQuery = `
+        UPDATE op_emp_personal_details
+        SET emp_status = 'Active', emp_status_id = 1
+        WHERE tbs_op_emp_id = $1 `;
+  
+      await pool.query(updateEmpStatusQuery, [tbs_op_emp_id]);
+  
+      console.log("Employee status updated successfully.");  
+      res.status(200).json('Employee professional documents are uploaded successfully');
+    } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+} 
 
 //employee-professional-documents GET CONTROLLER
 const FetchAllDocs = async (req, res) => {
   const query = `SELECT 
                     opd.tbs_op_emp_id, 
                     opd.aadhar_card_number, 
-                    opd.aadhar_card_doc,
+                    opd.aadhar_card_front_doc,
+                    opd.aadhar_card_back_doc,
                     opd.pan_card_number, 
-                    opd.pan_card_doc, 
+                    opd.pan_card_front_doc, 
+                    opd.pan_card_back_doc,
                     opd.offer_letter_doc,
                     opd.qualification_doc, 
                     oppd.emp_first_name, 
                     oppd.emp_last_name
-                    FROM 
+                FROM 
                     op_emp_professional_details opd
                     LEFT JOIN 
-                    op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id;`
+                    op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id `
   try {
       const result = await pool.query(query)
       res.status(200).json(result.rows)
@@ -547,23 +629,23 @@ const FetchDoc = async (req, res) => {
   const tbs_op_emp_id  = req.params.tbs_op_emp_id
 
   const query = `SELECT 
-  opd.tbs_op_emp_id, 
-  opd.aadhar_card_number, 
-  opd.aadhar_card_doc,
-  opd.pan_card_number, 
-  opd.pan_card_doc, 
-  opd.offer_letter_doc,
-  opd.qualification_doc, 
-  oppd.emp_first_name, 
-  oppd.emp_last_name
-FROM 
-  op_emp_professional_details opd
-LEFT JOIN 
-  op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id
-WHERE 
-  opd.tbs_op_emp_id = $1;
-`
-
+                    opd.tbs_op_emp_id, 
+                    opd.aadhar_card_number, 
+                    opd.aadhar_card_front_doc,
+                    opd.aadhar_card_back_doc,
+                    opd.pan_card_number, 
+                    opd.pan_card_front_doc, 
+                    opd.pan_card_back_doc,
+                    opd.offer_letter_doc,
+                    opd.qualification_doc, 
+                    oppd.emp_first_name, 
+                    oppd.emp_last_name
+                FROM 
+                    op_emp_professional_details opd
+                    LEFT JOIN 
+                    op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id
+                    WHERE 
+                    opd.tbs_op_emp_id = $1; `
   try {
       const result = await pool.query(query, [tbs_op_emp_id])
       if (result.rows.length === 0) {
@@ -579,22 +661,27 @@ WHERE
 //employee-professional-documents GET CONTROLLER
 const FetchAllDocsOnly = async (req, res) => {
     const query = `SELECT 
-    opd.tbs_op_emp_id, 
-    opd.aadhar_card_doc, 
-    opd.aadhar_card_file,
-    opd.pan_card_doc, 
-    opd.pancard_file, 
-    opd.offer_letter_doc, 
-    opd.offer_letter_doc_file,
-    opd.qualification_doc, 
-    opd.qualification_doc_file, 
-    oppd.emp_first_name, 
-    oppd.emp_last_name
-FROM 
-    op_emp_professional_details opd
-LEFT JOIN 
-    op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id;
-`
+                        opd.tbs_op_emp_id, 
+                        opd.aadhar_card_number,
+                        opd.aadhar_card_front_doc, 
+                        opd.aadhar_card_front_file,
+                        opd.aadhar_card_back_doc, 
+                        opd.aadhar_card_back_file,
+                        opd.pan_card_number,
+                        opd.pan_card_front_doc, 
+                        opd.pancard_front_file,
+                        opd.pan_card_back_doc, 
+                        opd.pancard_back_file, 
+                        opd.offer_letter_doc, 
+                        opd.offer_letter_doc_file,
+                        opd.qualification_doc, 
+                        opd.qualification_doc_file, 
+                        oppd.emp_first_name, 
+                        oppd.emp_last_name
+                    FROM 
+                        op_emp_professional_details opd
+                    LEFT JOIN 
+                        op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id `
   
     try {
         const result = await pool.query(query)
@@ -610,24 +697,29 @@ LEFT JOIN
     const tbs_op_emp_id  = req.params.tbs_op_emp_id
   
     const query = `SELECT 
-    opd.tbs_op_emp_id, 
-    opd.aadhar_card_doc, 
-    opd.aadhar_card_file,
-    opd.pan_card_doc, 
-    opd.pancard_file, 
-    opd.offer_letter_doc, 
-    opd.offer_letter_doc_file,
-    opd.qualification_doc, 
-    opd.qualification_doc_file, 
-    oppd.emp_first_name, 
-    oppd.emp_last_name
-FROM 
-    op_emp_professional_details opd
-LEFT JOIN 
-    op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id
-WHERE 
-    opd.tbs_op_emp_id = $1;
-`
+                        opd.tbs_op_emp_id,
+                        opd.aadhar_card_number, 
+                        opd.aadhar_card_front_doc, 
+                        opd.aadhar_card_front_file,
+                        opd.aadhar_card_back_doc, 
+                        opd.aadhar_card_back_file,
+                        opd.pan_card_number,
+                        opd.pan_card_front_doc, 
+                        opd.pancard_front_file,
+                        opd.pan_card_back_doc, 
+                        opd.pancard_back_file, 
+                        opd.offer_letter_doc, 
+                        opd.offer_letter_doc_file,
+                        opd.qualification_doc, 
+                        opd.qualification_doc_file, 
+                        oppd.emp_first_name, 
+                        oppd.emp_last_name
+                    FROM 
+                        op_emp_professional_details opd
+                    LEFT JOIN 
+                        op_emp_personal_details oppd ON opd.tbs_op_emp_id = oppd.tbs_op_emp_id
+                    WHERE 
+                        opd.tbs_op_emp_id = $1; `
   
     try {
         const result = await pool.query(query, [tbs_op_emp_id])
@@ -667,12 +759,12 @@ const putEmployee = async (req, res) => {
   } = req.body
 
 
-  const profile_img = req.files['profile_img'] ? `/emp_professional_documents/${req.files['profile_img'][0].filename}` : null
-  const aadhar_card_doc = req.files['aadhar_card_doc'] ? `/emp_professional_documents/${req.files['aadhar_card_doc'][0].filename}` : null
-  const pan_card_doc = req.files['pan_card_doc'] ? `/emp_professional_documents/${req.files['pan_card_doc'][0].filename}` : null
-  const offer_letter_doc = req.files['offer_letter_doc'] ? `/emp_professional_documents/${req.files['offer_letter_doc'][0].filename}` : null
-  const qualification_doc = req.files['qualification_doc'] ? `/emp_professional_documents/${req.files['qualification_doc'][0].filename}` : null
-  const other_documents = req.files['other_documents'] ? `/emp_professional_documents/${req.files['other_documents'][0].filename}` : null
+  const profile_img = req.files['profile_img'] ? `/op_employee_documents/${req.files['profile_img'][0].filename}` : null
+  const aadhar_card_doc = req.files['aadhar_card_doc'] ? `/op_employee_documents/${req.files['aadhar_card_doc'][0].filename}` : null
+  const pan_card_doc = req.files['pan_card_doc'] ? `/op_employee_documents/${req.files['pan_card_doc'][0].filename}` : null
+  const offer_letter_doc = req.files['offer_letter_doc'] ? `/op_employee_documents/${req.files['offer_letter_doc'][0].filename}` : null
+  const qualification_doc = req.files['qualification_doc'] ? `/op_employee_documents/${req.files['qualification_doc'][0].filename}` : null
+  const other_documents = req.files['other_documents'] ? `/op_employee_documents/${req.files['other_documents'][0].filename}` : null
 
   const aadhar_card_file = req.files && req.files['aadhar_card_doc'] ? {
       type: req.files['aadhar_card_doc'][0].mimetype,
@@ -825,7 +917,7 @@ const employeeLogin = async (req, res) => {
         }
 
         const employee = employees.find(
-            (emp) => emp.password === password && emp.emp_status_id === 2 
+            (emp) => emp.password === password && emp.emp_status_id === 1 
         );
 
         if (!employee) {
@@ -967,7 +1059,7 @@ async function insertData(req, res) {
 
             row.type_name = 'EMPLOYEE';
             row.type_id = 'OPEMP101';
-            row.emp_status = 'active';
+            row.emp_status = 'Active';
             row.emp_status_id = 1;
 
             const personalQuery = `
